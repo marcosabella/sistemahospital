@@ -498,7 +498,7 @@ function Landing({ onAdminAccess }) {
   );
 }
 
-function Login({ onLogin, onBack }) {
+function Login({ onLogin }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -536,9 +536,6 @@ function Login({ onLogin, onBack }) {
       </section>
       <section className="flex min-h-screen items-center justify-center bg-white px-6 py-12">
         <div className="w-full max-w-md">
-          <button type="button" onClick={onBack} className="mb-8 flex items-center gap-1 text-sm font-bold text-slate-500 hover:text-hospital-600">
-            <ChevronLeft size={17} /> Volver al inicio
-          </button>
           <div className="mb-12 lg:hidden">
             <Brand />
           </div>
@@ -1031,24 +1028,9 @@ function PatientForm({
     <form onSubmit={save}>
       <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
         <div>
-          <button
-            type="button"
-            onClick={onCancel}
-            className="mb-3 flex items-center gap-1 text-sm font-semibold text-slate-500 hover:text-hospital-600"
-          >
-            <ChevronLeft size={17} /> Volver a pacientes
-          </button>
-          <p className="text-sm font-semibold text-hospital-600">
-            Gestión de pacientes
-          </p>
-          <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-800">
+          <h2 className="text-2xl font-bold tracking-tight text-slate-800">
             {modeTitle}
           </h2>
-          <p className="mt-2 text-sm text-slate-500">
-            {readOnly
-              ? "Consultá la información registrada."
-              : "Completá la información personal y de cobertura. Los campos con * son obligatorios."}
-          </p>
         </div>
         <div className="flex gap-3">
           <button type="button" onClick={onCancel} className="secondary">
@@ -1517,24 +1499,9 @@ function ProfessionalForm({
       <form onSubmit={save}>
         <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
           <div>
-            <button
-              type="button"
-              onClick={onCancel}
-              className="mb-3 flex items-center gap-1 text-sm font-semibold text-slate-500 hover:text-hospital-600"
-            >
-              <ChevronLeft size={17} /> Volver a profesionales
-            </button>
-            <p className="text-sm font-semibold text-hospital-600">
-              Gestión de profesionales
-            </p>
-            <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-800">
+            <h2 className="text-2xl font-bold tracking-tight text-slate-800">
               {modeTitle}
             </h2>
-            <p className="mt-2 text-sm text-slate-500">
-              {readOnly
-                ? "Consultá la información registrada."
-                : "Completá los datos profesionales y de contacto. Los campos con * son obligatorios."}
-            </p>
           </div>
           <div className="flex gap-3">
             <button type="button" onClick={onCancel} className="secondary">
@@ -1751,24 +1718,9 @@ function PersonnelForm({
       <form onSubmit={save}>
         <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
           <div>
-            <button
-              type="button"
-              onClick={onCancel}
-              className="mb-3 flex items-center gap-1 text-sm font-semibold text-slate-500 hover:text-hospital-600"
-            >
-              <ChevronLeft size={17} /> Volver a personal
-            </button>
-            <p className="text-sm font-semibold text-hospital-600">
-              Gestión de personal
-            </p>
-            <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-800">
+            <h2 className="text-2xl font-bold tracking-tight text-slate-800">
               {modeTitle}
             </h2>
-            <p className="mt-2 text-sm text-slate-500">
-              {readOnly
-                ? "Consultá la información registrada."
-                : "Completá los datos personales, laborales y de contacto. Los campos con * son obligatorios."}
-            </p>
           </div>
           <div className="flex gap-3">
             <button type="button" onClick={onCancel} className="secondary">
@@ -1896,7 +1848,7 @@ function PersonnelForm({
 function PersonnelList({ personnel, onNew, onView, onEdit, onDelete }) {
   const [query, setQuery] = useState("");
   const filtered = personnel.filter((p) =>
-    `${p.nombre} ${p.apellido} ${p.dni} ${p.codigo} ${p.area}`
+    `${p.nombre} ${p.apellido} ${p.dni} ${p.area}`
       .toLowerCase()
       .includes(query.toLowerCase()),
   );
@@ -1923,7 +1875,7 @@ function PersonnelList({ personnel, onNew, onView, onEdit, onDelete }) {
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Buscar por nombre, DNI, código o área..."
+              placeholder="Buscar por nombre, DNI o área..."
               className="control pl-11"
             />
           </div>
@@ -1947,7 +1899,6 @@ function PersonnelList({ personnel, onNew, onView, onEdit, onDelete }) {
                       <p className="font-semibold text-slate-700">
                         {p.apellido}, {p.nombre}
                       </p>
-                      <p className="mt-1 text-xs text-slate-400">{p.codigo}</p>
                     </td>
                     <td className="px-6 py-4 text-slate-500">{p.dni}</td>
                     <td className="px-6 py-4">
@@ -2001,7 +1952,7 @@ function PersonnelList({ personnel, onNew, onView, onEdit, onDelete }) {
               </h3>
               <p className="mx-auto mt-2 max-w-sm text-sm leading-6 text-slate-500">
                 {query
-                  ? "Probá con otro nombre, DNI, código o área."
+                  ? "Probá con otro nombre, DNI o área."
                   : "Registrá a la primera persona para comenzar."}
               </p>
               {!query && (
@@ -2024,7 +1975,7 @@ function PersonnelList({ personnel, onNew, onView, onEdit, onDelete }) {
 function ProfessionalList({ professionals, onNew, onView, onEdit, onDelete }) {
   const [query, setQuery] = useState("");
   const filtered = professionals.filter((p) =>
-    `${p.nombre} ${p.apellido} ${p.dni} ${p.codigo} ${p.matricula} ${p.especialidad}`
+    `${p.nombre} ${p.apellido} ${p.dni} ${p.matricula} ${p.especialidad}`
       .toLowerCase()
       .includes(query.toLowerCase()),
   );
@@ -2062,6 +2013,7 @@ function ProfessionalList({ professionals, onNew, onView, onEdit, onDelete }) {
               <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-6 py-4">Profesional</th>
+                  <th className="px-6 py-4">DNI</th>
                   <th className="px-6 py-4">Matrícula</th>
                   <th className="px-6 py-4">Especialidad</th>
                   <th className="px-6 py-4">Contacto</th>
@@ -2075,10 +2027,8 @@ function ProfessionalList({ professionals, onNew, onView, onEdit, onDelete }) {
                       <p className="font-semibold text-slate-700">
                         {p.apellido}, {p.nombre}
                       </p>
-                      <p className="mt-1 text-xs text-slate-400">
-                        {p.codigo} · DNI {p.dni}
-                      </p>
                     </td>
+                    <td className="px-6 py-4 text-slate-500">{p.dni}</td>
                     <td className="px-6 py-4 text-slate-500">{p.matricula}</td>
                     <td className="px-6 py-4">
                       <span className="rounded-full bg-hospital-50 px-3 py-1 text-xs font-semibold text-hospital-700">
@@ -2176,23 +2126,9 @@ function MedicationForm({ initial = emptyMedication, onCancel, onSaved }) {
     <form onSubmit={save}>
       <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
         <div>
-          <button
-            type="button"
-            onClick={onCancel}
-            className="mb-3 flex items-center gap-1 text-sm font-semibold text-slate-500 hover:text-hospital-600"
-          >
-            <ChevronLeft size={17} /> Volver a medicamentos
-          </button>
-          <p className="text-sm font-semibold text-hospital-600">
-            Gestión de medicamentos
-          </p>
-          <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-800">
+          <h2 className="text-2xl font-bold tracking-tight text-slate-800">
             {data.id ? "Editar medicamento" : "Nuevo medicamento"}
           </h2>
-          <p className="mt-2 text-sm text-slate-500">
-            Completá la información comercial. Los campos con * son
-            obligatorios.
-          </p>
         </div>
         <div className="flex gap-3">
           <button type="button" onClick={onCancel} className="secondary">
@@ -2397,23 +2333,9 @@ function HealthInsuranceForm({
     <form onSubmit={save}>
       <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
         <div>
-          <button
-            type="button"
-            onClick={onCancel}
-            className="mb-3 flex items-center gap-1 text-sm font-semibold text-slate-500 hover:text-hospital-600"
-          >
-            <ChevronLeft size={17} /> Volver a obras sociales
-          </button>
-          <p className="text-sm font-semibold text-hospital-600">
-            Gestión de obras sociales
-          </p>
-          <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-800">
+          <h2 className="text-2xl font-bold tracking-tight text-slate-800">
             {data.codigo ? "Editar obra social" : "Nueva obra social"}
           </h2>
-          <p className="mt-2 text-sm text-slate-500">
-            Completá los datos institucionales y el domicilio. Los campos con *
-            son obligatorios.
-          </p>
         </div>
         <div className="flex gap-3">
           <button type="button" onClick={onCancel} className="secondary">
@@ -2656,23 +2578,9 @@ function NomenclatureForm({ onCancel, onSaved }) {
     <form onSubmit={save}>
       <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
         <div>
-          <button
-            type="button"
-            onClick={onCancel}
-            className="mb-3 flex items-center gap-1 text-sm font-semibold text-slate-500 hover:text-hospital-600"
-          >
-            <ChevronLeft size={17} /> Volver al nomenclador
-          </button>
-          <p className="text-sm font-semibold text-hospital-600">
-            Nomenclador NPHPGD
-          </p>
-          <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-800">
+          <h2 className="text-2xl font-bold tracking-tight text-slate-800">
             Agregar código
           </h2>
-          <p className="mt-2 text-sm text-slate-500">
-            Registrá una prestación y su arancel. Todos los campos son
-            obligatorios.
-          </p>
         </div>
         <div className="flex gap-3">
           <button type="button" onClick={onCancel} className="secondary">
@@ -3392,27 +3300,13 @@ function CaboForm({
     <form onSubmit={save}>
       <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
         <div>
-          <button
-            type="button"
-            onClick={onCancel}
-            className="mb-3 flex items-center gap-1 text-sm font-semibold text-slate-500 hover:text-hospital-600"
-          >
-            <ChevronLeft size={17} /> Volver a Cabos
-          </button>
-          <p className="text-sm font-semibold text-hospital-600">
-            Proceso central de atención
-          </p>
-          <h2 className="mt-1 text-2xl font-bold tracking-tight text-slate-800">
+          <h2 className="text-2xl font-bold tracking-tight text-slate-800">
             {readOnly
               ? "Consulta de Cabo"
               : data.id
                 ? "Modificar Cabo"
                 : "Nuevo Cabo"}
           </h2>
-          <p className="mt-2 text-sm text-slate-500">
-            Comprobante de Atención de Beneficiarios de Agentes del Seguro de
-            Salud.
-          </p>
         </div>
         <div className="flex gap-3">
           <button type="button" onClick={onCancel} className="secondary">
@@ -4103,26 +3997,13 @@ function CobroOSForm({
       <form onSubmit={save}>
         <div className="mb-6 flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
           <div>
-            <button
-              type="button"
-              onClick={onCancel}
-              className="mb-3 flex items-center gap-1 text-sm font-semibold text-slate-500 hover:text-hospital-600"
-            >
-              <ChevronLeft size={17} /> Volver a cobros
-            </button>
-            <p className="text-sm font-semibold text-hospital-600">
-              Facturación y recupero
-            </p>
-            <h2 className="mt-1 text-2xl font-bold text-slate-800">
+            <h2 className="text-2xl font-bold text-slate-800">
               {readOnly
                 ? "Consulta de cobro"
                 : data.id
                   ? "Modificar cobro"
                   : "Nuevo cobro a obra social"}
             </h2>
-            <p className="mt-2 text-sm text-slate-500">
-              Registrá la presentación, facturación y cobro de prestaciones.
-            </p>
           </div>
           <div className="flex gap-3">
             <button type="button" onClick={onCancel} className="secondary">
@@ -4683,21 +4564,14 @@ function AppointmentForm({
     <form onSubmit={save}>
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
-          <button
-            type="button"
-            onClick={onCancel}
-            className="mb-3 flex items-center gap-1 text-sm font-semibold text-slate-500 hover:text-hospital-600"
-          >
-            <ChevronLeft size={17} /> Volver a la agenda
-          </button>
-          <p className="text-sm font-semibold text-hospital-600">
-            Gestión de turnos
-          </p>
-          <h2 className="mt-1 text-2xl font-bold text-slate-800">
+          <h2 className="text-2xl font-bold text-slate-800">
             {data.id ? "Modificar turno" : "Nuevo turno"}
           </h2>
         </div>
-        <button className="primary">Guardar turno</button>
+        <div className="flex gap-3">
+          <button type="button" onClick={onCancel} className="secondary">Cancelar</button>
+          <button className="primary">Guardar turno</button>
+        </div>
       </div>
       <Section
         icon={CalendarPlus}
@@ -5061,6 +4935,7 @@ function HealthInsuranceLiquidation({ healthInsurances, onClose, onNotice }) {
   const [reportPickerOpen, setReportPickerOpen] = useState(false);
   const allPrintReports = ["ambulatory", "internment", "image", "laboratory", "hospitalization", "invoice"];
   const [selectedPrintReports, setSelectedPrintReports] = useState(allPrintReports);
+  const [invoiceNumber, setInvoiceNumber] = useState("");
   const [page, setPage] = useState(1);
   const [caboDetail, setCaboDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -5136,7 +5011,7 @@ function HealthInsuranceLiquidation({ healthInsurances, onClose, onNotice }) {
       setDetailLoading(false);
     }
   };
-  const printAmbulatoryReport = async (reportsToPrint) => {
+  const printAmbulatoryReport = async (reportsToPrint, manualInvoiceNumber = "") => {
     if (!healthInsuranceId || !from || !to || from > to) {
       onNotice("Seleccioná una obra social y un período válido.");
       return;
@@ -5355,7 +5230,7 @@ function HealthInsuranceLiquidation({ healthInsurances, onClose, onNotice }) {
       const invoicePageHtml = includeInvoice && invoiceTotal > 0 ? `<section class="report-page invoice-page"><header>
         <img src="${escapeHtml(hospitalCrossUrl)}" alt="Hospital" />
         <div class="institution"><strong>HOSPITAL MUNICIPAL LUIS O. RIVERO</strong><span>Mariano Moreno 140 - Jovita - 6127 - (Cba)</span><span>Tel. (03385) - 498205 &nbsp;&nbsp; Código 04.330953</span></div>
-        <div class="report-meta"><strong>Factura N° 1</strong><span>Fecha de emisión: ${emittedAt}</span><span>Página 1 de 1</span></div>
+        <div class="report-meta"><strong>Factura N° ${escapeHtml(manualInvoiceNumber)}</strong><span>Fecha de emisión: ${emittedAt}</span><span>Página 1 de 1</span></div>
       </header><div class="insurance invoice-insurance"><div><b>OBRA SOCIAL:</b> ${escapeHtml(insurance.sigla || "")}</div><div><b>${escapeHtml(insurance.descripcion || "")}</b></div><div>${escapeHtml(address)}</div><div><b>CÓDIGO:</b> ${escapeHtml(insurance.codigo || "")}</div></div>
       <div class="billing-period"><strong>FACTURACIÓN CORRESPONDIENTE AL MES DE:</strong><span>${escapeHtml(billingPeriod)}</span></div>
       <table class="invoice-table"><colgroup><col/><col style="width:32mm"/><col style="width:32mm"/></colgroup><thead><tr><th>CONCEPTO</th><th colspan="2">A CARGO DE LA OBRA SOCIAL</th></tr><tr><th></th><th>HONORARIOS</th><th>GASTOS</th></tr></thead><tbody>
@@ -5508,6 +5383,22 @@ function HealthInsuranceLiquidation({ healthInsurances, onClose, onNotice }) {
                   <span className="font-semibold text-slate-700">{label}</span>
                 </label>
               ))}
+              {selectedPrintReports.includes("invoice") && (
+                <label className="block rounded-xl border border-hospital-200 bg-hospital-50 p-4">
+                  <span className="text-sm font-semibold text-slate-700">
+                    Número de factura <span className="text-red-600">*</span>
+                  </span>
+                  <input
+                    type="text"
+                    value={invoiceNumber}
+                    onChange={(event) => setInvoiceNumber(event.target.value)}
+                    placeholder="Ingresá el número de factura"
+                    autoFocus
+                    className="mt-2 w-full rounded-xl border border-slate-300 bg-white px-3 py-2.5 outline-none focus:border-hospital-500"
+                  />
+                  {!invoiceNumber.trim() && <span className="mt-2 block text-xs font-semibold text-red-600">Este dato es obligatorio para imprimir la factura.</span>}
+                </label>
+              )}
               <button
                 type="button"
                 onClick={() => setSelectedPrintReports(selectedPrintReports.length === allPrintReports.length ? [] : allPrintReports)}
@@ -5520,8 +5411,8 @@ function HealthInsuranceLiquidation({ healthInsurances, onClose, onNotice }) {
               <button type="button" onClick={() => setReportPickerOpen(false)} className="rounded-xl border border-slate-300 px-4 py-2.5 font-semibold text-slate-700 hover:bg-white">Cancelar</button>
               <button
                 type="button"
-                disabled={!selectedPrintReports.length}
-                onClick={() => { const selection = [...selectedPrintReports]; setReportPickerOpen(false); printAmbulatoryReport(selection); }}
+                disabled={!selectedPrintReports.length || (selectedPrintReports.includes("invoice") && !invoiceNumber.trim())}
+                onClick={() => { const selection = [...selectedPrintReports]; const number = invoiceNumber.trim(); setReportPickerOpen(false); printAmbulatoryReport(selection, number); }}
                 className="rounded-xl bg-hospital-600 px-4 py-2.5 font-semibold text-white hover:bg-hospital-700 disabled:opacity-40"
               >
                 Generar impresión
@@ -5669,7 +5560,7 @@ function ProfessionalLiquidation({ onClose, onNotice }) {
       groups[key].rows.push(item);
       return groups;
     }, {}));
-    const pageCapacity = 31;
+    const pageCapacity = 36;
     const insurancePages = [];
     let currentPage = [];
     let remainingCapacity = pageCapacity;
@@ -5714,7 +5605,7 @@ function ProfessionalLiquidation({ onClose, onNotice }) {
       @page { size: A4 portrait; margin: 0; }
       * { box-sizing: border-box; }
       body { margin: 0; color: #111; font: 10px Arial, Helvetica, sans-serif; background:#eee; }
-      .report-page { width:210mm; min-height:297mm; margin:0 auto; padding:10mm 9mm 9mm; background:#fff; page-break-after:always; }
+      .report-page { width:210mm; min-height:297mm; margin:0 auto; padding:10mm 9mm 6mm; background:#fff; page-break-after:always; }
       .report-page:last-child { page-break-after:auto; }
       .header { display: grid; grid-template-columns: 1.15fr .85fr; gap: 24px; align-items: start; padding-bottom: 15px; }
       .hospital { display: flex; align-items: flex-start; gap: 13px; }
@@ -5806,8 +5697,17 @@ function PersonnelLiquidation({ onClose, onNotice }) {
   };
   const printReport = () => {
     if (!rows.length) return;
-    const reportWindow = window.open("", "_blank", "width=900,height=1100");
+    const printFrame = document.createElement("iframe");
+    printFrame.setAttribute("aria-hidden", "true");
+    printFrame.style.position = "fixed";
+    printFrame.style.width = "0";
+    printFrame.style.height = "0";
+    printFrame.style.border = "0";
+    printFrame.style.visibility = "hidden";
+    document.body.appendChild(printFrame);
+    const reportWindow = printFrame.contentWindow;
     if (!reportWindow) {
+      printFrame.remove();
       onNotice("El navegador bloqueó la ventana de impresión.");
       return;
     }
@@ -5852,7 +5752,7 @@ function PersonnelLiquidation({ onClose, onNotice }) {
       <div class="autogestion"><span>Importe correspondiente por autogestión:</span><span>${reportMoney(summary.fondoPersonal10)}</span></div>
       <table class="personnel"><thead><tr><th>Personal</th><th>Correspondiente por Autogestión al Personal</th></tr></thead><tbody>${personnelRows}</tbody></table>
       <p class="footer">Total de personal: ${summary.totalPersonal || rows.length}</p>
-      <script>window.addEventListener('load',()=>{window.print();});<\/script>
+      <script>window.addEventListener('afterprint',()=>window.frameElement?.remove());window.addEventListener('load',()=>setTimeout(()=>{window.focus();window.print()},250));<\/script>
     </body></html>`);
     reportWindow.document.close();
   };
@@ -6810,16 +6710,9 @@ function Dashboard({ onLogout, currentUser }) {
 }
 
 export default function App() {
-  const [screen, setScreen] = useState(() => sessionStorage.getItem("hospital_token") ? "dashboard" : "landing");
+  const [screen, setScreen] = useState(() => sessionStorage.getItem("hospital_token") ? "dashboard" : "login");
   const [currentUser, setCurrentUser] = useState(() => { try { return JSON.parse(sessionStorage.getItem("hospital_user") || "null"); } catch { return null; } });
   if (screen === "dashboard")
-    return <Dashboard currentUser={currentUser} onLogout={async () => { try { await endSession(); } catch { /* La sesión local se cierra igualmente. */ } sessionStorage.removeItem("hospital_token"); sessionStorage.removeItem("hospital_user"); setCurrentUser(null); setScreen("landing"); }} />;
-  if (screen === "login")
-    return (
-      <Login
-        onLogin={(user) => { setCurrentUser(user); setScreen("dashboard"); }}
-        onBack={() => setScreen("landing")}
-      />
-    );
-  return <Landing onAdminAccess={() => setScreen("login")} />;
+    return <Dashboard currentUser={currentUser} onLogout={async () => { try { await endSession(); } catch { /* La sesión local se cierra igualmente. */ } sessionStorage.removeItem("hospital_token"); sessionStorage.removeItem("hospital_user"); setCurrentUser(null); setScreen("login"); }} />;
+  return <Login onLogin={(user) => { setCurrentUser(user); setScreen("dashboard"); }} />;
 }
