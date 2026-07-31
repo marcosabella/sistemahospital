@@ -516,7 +516,7 @@ function Login({ onLogin }) {
     finally { setLoading(false); }
   };
   return (
-    <main className="grid min-h-screen lg:grid-cols-[1.05fr_.95fr]">
+    <main className="login-screen grid min-h-screen lg:grid-cols-[1.05fr_.95fr]">
       <section className="relative hidden overflow-hidden login-pattern p-14 text-white lg:flex lg:flex-col lg:justify-between">
         <Brand />
         <div className="relative z-10 max-w-xl">
@@ -4472,6 +4472,10 @@ function AppointmentForm({
   const [errors, setErrors] = useState({});
   const [professionalSearchOpen, setProfessionalSearchOpen] = useState(false);
   const [patientSearchOpen, setPatientSearchOpen] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const selected = initial?.fecha ? new Date(`${initial.fecha}T12:00:00`) : new Date();
+    return new Date(selected.getFullYear(), selected.getMonth(), 1);
+  });
   const selectedProfessional = professionals.find(
     (item) => String(item.codigo) === String(data.profesionalCodigo),
   );
@@ -4493,6 +4497,21 @@ function AppointmentForm({
       (a, b) =>
         a.diaSemana - b.diaSemana || a.desde.localeCompare(b.desde),
     );
+  const enabledWeekDays = new Set(
+    professionalAvailability.map((item) => Number(item.diaSemana)),
+  );
+  const calendarStart = new Date(
+    calendarMonth.getFullYear(),
+    calendarMonth.getMonth(),
+    1 - calendarMonth.getDay(),
+  );
+  const calendarDays = Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(calendarStart);
+    date.setDate(calendarStart.getDate() + index);
+    return date;
+  });
+  const toDateValue = (date) =>
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
   const selectedDay = data.fecha
     ? new Date(`${data.fecha}T12:00:00`).getDay()
     : -1;
@@ -4647,19 +4666,45 @@ function AppointmentForm({
             </button>
           </div>
         </Field>
-        <Field label="Fecha" required error={errors.fecha}>
-          <input
-            type="date"
-            value={data.fecha}
-            onChange={(event) =>
-              setData((current) => ({
-                ...current,
-                fecha: event.target.value,
-                hora: "",
-              }))
-            }
-            className={`control ${errors.fecha ? "invalid" : ""}`}
-          />
+        <Field label="Fecha" required error={errors.fecha} className="sm:col-span-2">
+          <div className={`overflow-hidden rounded-2xl border bg-white ${errors.fecha ? "border-red-400" : "border-slate-200"}`}>
+            <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+              <button type="button" onClick={() => setCalendarMonth((current) => new Date(current.getFullYear(), current.getMonth() - 1, 1))} className="grid size-9 place-items-center rounded-lg text-slate-500 hover:bg-slate-100" aria-label="Mes anterior"><ChevronLeft size={18} /></button>
+              <p className="font-bold capitalize text-slate-700">{calendarMonth.toLocaleDateString("es-AR", { month: "long", year: "numeric" })}</p>
+              <button type="button" onClick={() => setCalendarMonth((current) => new Date(current.getFullYear(), current.getMonth() + 1, 1))} className="grid size-9 place-items-center rounded-lg text-slate-500 hover:bg-slate-100" aria-label="Mes siguiente"><ChevronRight size={18} /></button>
+            </div>
+            <div className="grid grid-cols-7 px-3 pt-3 text-center text-xs font-bold uppercase text-slate-400">
+              {["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"].map((day) => <span key={day} className="py-1">{day}</span>)}
+            </div>
+            <div className="grid grid-cols-7 gap-1 p-3 pt-1">
+              {calendarDays.map((date) => {
+                const value = toDateValue(date);
+                const inMonth = date.getMonth() === calendarMonth.getMonth();
+                const enabled = Boolean(data.profesionalCodigo) && enabledWeekDays.has(date.getDay());
+                const selected = data.fecha === value;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    disabled={!enabled}
+                    title={!data.profesionalCodigo ? "Seleccioná primero un profesional" : enabled ? "Día de atención disponible" : "El profesional no atiende este día"}
+                    onClick={() => {
+                      setData((current) => ({ ...current, fecha: value, hora: "" }));
+                      setErrors((current) => ({ ...current, fecha: undefined }));
+                    }}
+                    className={`h-10 rounded-lg text-sm font-semibold transition ${selected ? "bg-hospital-600 text-white shadow-sm" : enabled ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100" : "cursor-not-allowed bg-slate-50 text-slate-300"} ${inMonth ? "" : "opacity-40"}`}
+                  >
+                    {date.getDate()}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="flex flex-wrap gap-4 border-t border-slate-100 px-4 py-3 text-xs text-slate-500">
+              <span className="flex items-center gap-2"><span className="size-3 rounded bg-emerald-100" /> Día de atención</span>
+              <span className="flex items-center gap-2"><span className="size-3 rounded bg-slate-100" /> No disponible</span>
+              {!data.profesionalCodigo && <span className="font-semibold text-amber-700">Seleccioná un profesional para habilitar sus fechas.</span>}
+            </div>
+          </div>
         </Field>
         <Field label="Hora" required error={errors.hora}>
           <select
@@ -4739,6 +4784,10 @@ function AppointmentForm({
             setData((current) => ({
               ...current,
               profesionalCodigo: String(professional.codigo),
+              fecha:
+                String(current.profesionalCodigo) === String(professional.codigo)
+                  ? current.fecha
+                  : "",
               hora:
                 String(current.profesionalCodigo) === String(professional.codigo)
                   ? current.hora

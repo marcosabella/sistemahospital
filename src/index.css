@@ -111,3 +111,10 @@ table td {
     linear-gradient(135deg, transparent 45%, rgb(255 255 255 / 4%) 45% 55%, transparent 55%);
   background-size: 36px 36px, 76px 76px;
 }
+
+/* Compensa el zoom de escritorio para que el login cubra todo el viewport. */
+@media (min-width: 1024px) {
+  .login-screen {
+    min-height: calc(100vh / 0.75);
+  }
+}
