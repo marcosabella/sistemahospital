@@ -335,8 +335,8 @@ app.MapGet("/api/bootstrap", async (HttpContext context, HospitalDatabase db, Ca
 
     return Results.Ok(new
     {
-        patients = Has("patients","appointments","cabos") ? patientsTask.Result : Empty(),
-        professionals = Has("professionals","appointments","cabos","liquidacion-profesionales") ? professionalsTask.Result : Empty(),
+        patients = Has("patients","appointments","cabos","clinical-history") ? patientsTask.Result : Empty(),
+        professionals = Has("professionals","appointments","cabos","clinical-history","liquidacion-profesionales") ? professionalsTask.Result : Empty(),
         personnel = Has("personnel","liquidacion-personal") ? personnelTask.Result : Empty(),
         medications = Has("medications","cabos") ? medicationsTask.Result : Empty(),
         healthInsurances = Has("health-insurances","cabos","cobros-os","liquidacion-obra-social") ? healthInsurancesTask.Result : Empty(),
@@ -919,6 +919,83 @@ app.MapGet("/api/cobros/{id:int}/cabos-debito", async (int id, int? caboId, Date
     return Results.Ok(rows);
 });
 
+app.MapGet("/api/clinical-records/patients/{id:int}", async (int id, HospitalDatabase db, CancellationToken ct) =>
+{
+    var patientTask = db.QueryAsync("""
+        SELECT idPaciente AS id, CONVERT(nvarchar(20), dni) AS dni, nombre, apellido,
+               CONVERT(varchar(10), fecha_nacimiento, 23) AS nacimiento
+        FROM dbo.Paciente WHERE idPaciente=@id
+        """, ct, new() { ["id"] = id });
+    var appointmentsTask = db.QueryAsync("""
+        SELECT t.idTurno AS id, CONVERT(varchar(10), t.fecha, 23) AS fecha,
+               LEFT(CONVERT(varchar(8), t.hora, 108), 5) AS hora, t.estado, t.motivo, t.observaciones,
+               t.idProfesional AS profesionalId, LTRIM(RTRIM(CONCAT(p.apellido, N', ', p.nombre))) AS profesional
+        FROM dbo.Turno t
+        LEFT JOIN dbo.Profesionales p ON p.idProfesional=t.idProfesional
+        WHERE t.idPaciente=@id ORDER BY t.fecha DESC, t.hora DESC
+        """, ct, new() { ["id"] = id });
+    var cabosTask = db.QueryAsync("""
+        SELECT c.idCabo AS id, CONVERT(nvarchar(20), c.idCabo) AS numero,
+               CONVERT(varchar(10), c.fechaCabo, 23) AS fecha,
+               CASE c.idTipoAtencion WHEN 1 THEN N'Consulta' WHEN 2 THEN N'Práctica' WHEN 3 THEN N'Internación' ELSE N'Atención' END AS tipoAtencion,
+               os.descripcion AS obraSocial, profesionales.nombres AS profesionales,
+               prestaciones.detalle AS prestaciones, diagnosticos.detalle AS diagnosticos,
+               laboratorio.detalle AS laboratorio
+        FROM dbo.Cabo c
+        LEFT JOIN dbo.ObraSocial os ON os.Id=c.idObraSocial
+        OUTER APPLY (SELECT STRING_AGG(x.nombre, N', ') AS nombres FROM (
+            SELECT DISTINCT LTRIM(RTRIM(CONCAT(p.apellido, N', ', p.nombre))) AS nombre
+            FROM dbo.ProfesionalXpractica px LEFT JOIN dbo.Profesionales p ON p.idProfesional=px.idProfesional
+            WHERE px.idCabo=c.idCabo AND p.idProfesional IS NOT NULL
+        ) x) profesionales
+        OUTER APPLY (SELECT STRING_AGG(x.descripcion, N'; ') AS detalle FROM (
+            SELECT DISTINCT LTRIM(RTRIM(n.Descripcion)) AS descripcion
+            FROM dbo.NomencladorXcabo nx INNER JOIN dbo.Nomenclador n ON n.Id=nx.idNomenclador
+            WHERE nx.idCabo=c.idCabo
+        ) x) prestaciones
+        OUTER APPLY (SELECT STRING_AGG(x.descripcion, N'; ') AS detalle FROM (
+            SELECT DISTINCT CONCAT(cie.Codigo, N' - ', cie.Descripcion) AS descripcion
+            FROM dbo.CIExCabo cx INNER JOIN dbo.CIE_10_COD3 cie ON cie.Id=cx.idCIE
+            WHERE cx.idCabo=c.idCabo
+        ) x) diagnosticos
+        OUTER APPLY (SELECT STRING_AGG(x.descripcion, N'; ') AS detalle FROM (
+            SELECT DISTINCT LTRIM(RTRIM(l.Descripcion)) AS descripcion
+            FROM dbo.LaboratorioXcabo lx INNER JOIN dbo.Nomenclador_Laboratorio l ON l.Id=lx.idLaboratorio
+            WHERE lx.idCabo=c.idCabo
+        ) x) laboratorio
+        WHERE c.idPaciente=@id ORDER BY c.fechaCabo DESC, c.idCabo DESC
+        """, ct, new() { ["id"] = id });
+    var recordsTask = db.QueryAsync("""
+        SELECT h.idRegistro AS id, CONVERT(varchar(16), h.fechaAtencion, 120) AS fechaAtencion,
+               h.descripcion, h.pedidosMedicos, h.laboratorio, h.idProfesional AS profesionalId,
+               h.idTurno AS turnoId, h.idCabo AS caboId,
+               LTRIM(RTRIM(CONCAT(p.apellido, N', ', p.nombre))) AS profesional,
+               u.nombre AS registradoPor, CONVERT(varchar(16), h.fechaCreacion, 120) AS fechaCreacion
+        FROM dbo.HistoriaClinicaRegistro h
+        LEFT JOIN dbo.Profesionales p ON p.idProfesional=h.idProfesional
+        LEFT JOIN dbo.SistemaUsuario u ON u.idUsuario=h.idUsuarioCreacion
+        WHERE h.idPaciente=@id ORDER BY h.fechaAtencion DESC, h.idRegistro DESC
+        """, ct, new() { ["id"] = id });
+    await Task.WhenAll(patientTask, appointmentsTask, cabosTask, recordsTask);
+    if (patientTask.Result.Count == 0) return Results.NotFound();
+    return Results.Ok(new { patient = patientTask.Result[0], appointments = appointmentsTask.Result, cabos = cabosTask.Result, records = recordsTask.Result });
+});
+
+app.MapPost("/api/clinical-records", async (ClinicalRecordInput input, HttpContext context, HospitalDatabase db, CancellationToken ct) =>
+{
+    if (input.PacienteId <= 0 || string.IsNullOrWhiteSpace(input.Descripcion))
+        return Results.ValidationProblem(new Dictionary<string, string[]> { ["descripcion"] = ["Ingresá una descripción de la atención."] });
+    var current = (Dictionary<string, object?>)context.Items["user"]!;
+    var parameters = input.Parameters();
+    parameters["usuario"] = current["idUsuario"];
+    var id = await db.ScalarAsync<int>("""
+        INSERT dbo.HistoriaClinicaRegistro(idPaciente,idProfesional,idTurno,idCabo,fechaAtencion,descripcion,pedidosMedicos,laboratorio,idUsuarioCreacion)
+        OUTPUT INSERTED.idRegistro
+        VALUES(@paciente,@profesional,@turno,@cabo,@fecha,@descripcion,@pedidos,@laboratorio,@usuario)
+        """, parameters, ct);
+    return Results.Created($"/api/clinical-records/{id}", new { id });
+});
+
 app.MapPost("/api/patients", async (PatientInput input, HospitalDatabase db, CancellationToken ct) =>
 {
     var parameters = input.Parameters();
@@ -1252,6 +1329,7 @@ static class AuthSecurity
             var p when p.Contains("/liquidations/health-insurance")=>"liquidacion-obra-social",
             var p when p.Contains("/liquidations/professionals")=>"liquidacion-profesionales",
             var p when p.Contains("/liquidations/personnel")=>"liquidacion-personal",
+            var p when p.StartsWith("/api/clinical-records")=>"clinical-history",
             var p when p.StartsWith("/api/patients")=>"patients",
             var p when p.StartsWith("/api/professionals")=>"professionals",
             var p when p.StartsWith("/api/personnel")=>"personnel",
@@ -1271,6 +1349,17 @@ sealed record PatientInput(object? Codigo, string Dni, string Nombre, string Ape
 {
     public Dictionary<string,object?> Parameters()=>new(){["dni"]=int.TryParse(Dni,out var dni)?dni:null,["nombre"]=Nombre,["apellido"]=Apellido,["nacimiento"]=string.IsNullOrWhiteSpace(Nacimiento)?null:Nacimiento,["sexo"]=Sexo switch{"Masculino"=>1,"Femenino"=>2,_=>null},["estadoCivil"]=EstadoCivil switch{"Soltero/a"=>1,"Casado/a"=>2,"Divorciado/a"=>3,"Viudo/a"=>4,_=>null},["ocupacion"]=Ocupacion,["telefono"]=Telefono,["celular"]=Celular,["calle"]=Calle,["numero"]=Numero,["idLocalidad"]=IdLocalidad,["cp"]=CodigoPostal,["obraSocial"]=ObraSocial,["numeroAfiliado"]=NumeroAfiliado,["beneficiario"]=Beneficiario switch{"Titular"=>1,"Familiar"=>2,"Adherente"=>3,"Otro"=>4,_=>null},["parentesco"]=Parentesco switch{"Cónyuge"=>1,"Hijo/a"=>2,"Otro"=>3,_=>null}};
     public object ToResponse(int id)=>new{codigo=id,dni=Dni,nombre=Nombre,apellido=Apellido,nacimiento=Nacimiento,sexo=Sexo,estadoCivil=EstadoCivil,ocupacion=Ocupacion,telefono=Telefono,celular=Celular,calle=Calle,numero=Numero,idLocalidad=IdLocalidad,localidad=Localidad,codigoPostal=CodigoPostal,partido=Partido,provincia=Provincia,obraSocial=ObraSocial,numeroAfiliado=NumeroAfiliado,beneficiario=Beneficiario,parentesco=Parentesco};
+}
+sealed record ClinicalRecordInput(int PacienteId, int? ProfesionalId, int? TurnoId, int? CaboId, string FechaAtencion, string Descripcion, string? PedidosMedicos, string? Laboratorio)
+{
+    public Dictionary<string, object?> Parameters() => new()
+    {
+        ["paciente"] = PacienteId, ["profesional"] = ProfesionalId,
+        ["turno"] = TurnoId, ["cabo"] = CaboId,
+        ["fecha"] = FechaAtencion, ["descripcion"] = Descripcion.Trim(),
+        ["pedidos"] = string.IsNullOrWhiteSpace(PedidosMedicos) ? null : PedidosMedicos.Trim(),
+        ["laboratorio"] = string.IsNullOrWhiteSpace(Laboratorio) ? null : Laboratorio.Trim()
+    };
 }
 sealed record ProfessionalInput(object? Codigo,string Dni,string Nombre,string Apellido,string? Telefono,string? Celular,string Matricula,string? Autogestion,string Especialidad,string? Calle,string? Numero,string? Localidad,string? CodigoPostal,string? Partido,string? Provincia)
 {

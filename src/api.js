@@ -13,6 +13,8 @@ export const loadUsers = () => authFetch('/api/users').then(parseResponse)
 export const saveUser = item => send(`/api/users${item.id ? `/${item.id}` : ''}`, item.id ? 'PUT' : 'POST', item)
 
 export const loadHospitalData = () => authFetch('/api/bootstrap').then(parseResponse)
+export const loadClinicalHistory = patientId => authFetch(`/api/clinical-records/patients/${patientId}`).then(parseResponse)
+export const saveClinicalRecord = item => send('/api/clinical-records', 'POST', item)
 export const loadHealthInsurances = () => authFetch('/api/catalogs/health-insurances').then(parseResponse)
 export const loadHealthInsuranceLiquidation = (healthInsuranceId, from, to) => {
   const params = new URLSearchParams({ healthInsuranceId, from, to })

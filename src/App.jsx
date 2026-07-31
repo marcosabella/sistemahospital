@@ -16,6 +16,8 @@ import {
   loadCaboDetails,
   loadCabosForDebit,
   loadHospitalData,
+  loadClinicalHistory,
+  saveClinicalRecord,
   loadHealthInsuranceLiquidation,
   loadAmbulatoryLiquidationReport,
   loadInternmentLiquidationReport,
@@ -1300,7 +1302,7 @@ function PatientForm({
   );
 }
 
-function PatientList({ patients, onNew, onView, onEdit, onDelete }) {
+function PatientList({ patients, onNew, onView, onEdit, onDelete, onHistory }) {
   const [query, setQuery] = useState("");
   const filtered = patients.filter((p) =>
     `${p.nombre} ${p.apellido} ${p.dni} ${p.codigo}`
@@ -1360,6 +1362,13 @@ function PatientList({ patients, onNew, onView, onEdit, onDelete }) {
                     </td>
                     <td className="px-6 py-4">
                       <div className="flex justify-end gap-1">
+                        {onHistory && <button
+                          onClick={() => onHistory(p)}
+                          className="rounded-lg p-2 text-slate-400 hover:bg-cyan-50 hover:text-cyan-700"
+                          title="Historia clínica"
+                        >
+                          <BookOpen size={18} />
+                        </button>}
                         <button
                           onClick={() => onView(p)}
                           className="rounded-lg p-2 text-slate-400 hover:bg-hospital-50 hover:text-hospital-600"
@@ -5766,10 +5775,74 @@ function PersonnelLiquidation({ onClose, onNotice }) {
   </section>;
 }
 
+function ClinicalHistory({ patients, initialPatient, professionals, canCreate, onNotice }) {
+  const [patient, setPatient] = useState(initialPatient || null);
+  const [patientPickerOpen, setPatientPickerOpen] = useState(!initialPatient);
+  const [history, setHistory] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const localNow = () => {
+    const now = new Date();
+    return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+  };
+  const emptyRecord = () => ({ pacienteId: patient?.codigo || 0, profesionalId: "", turnoId: "", caboId: "", fechaAtencion: localNow(), descripcion: "", pedidosMedicos: "", laboratorio: "" });
+  const [record, setRecord] = useState(emptyRecord);
+  const load = async (selected = patient) => {
+    if (!selected?.codigo) return;
+    setLoading(true);
+    try { setHistory(await loadClinicalHistory(selected.codigo)); }
+    catch (error) { onNotice(`No se pudo cargar la historia clínica: ${error.message}`); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { if (patient?.codigo) load(patient); }, [patient?.codigo]);
+  useEffect(() => {
+    if (!initialPatient) return;
+    setPatient(initialPatient);
+    setPatientPickerOpen(false);
+  }, [initialPatient]);
+  const choosePatient = (selected) => {
+    setPatient(selected);
+    setRecord({ ...emptyRecord(), pacienteId: selected.codigo });
+    setPatientPickerOpen(false);
+    setCreating(false);
+  };
+  const submit = async (event) => {
+    event.preventDefault();
+    if (!record.descripcion.trim()) return onNotice("Ingresá la descripción de la atención.");
+    try {
+      await saveClinicalRecord({
+        ...record,
+        pacienteId: Number(patient.codigo),
+        profesionalId: record.profesionalId ? Number(record.profesionalId) : null,
+        turnoId: record.turnoId ? Number(record.turnoId) : null,
+        caboId: record.caboId ? Number(record.caboId) : null,
+      });
+      setCreating(false);
+      setRecord({ ...emptyRecord(), pacienteId: patient.codigo });
+      await load(patient);
+      onNotice("Registro agregado a la historia clínica.");
+    } catch (error) { onNotice(`No se pudo guardar el registro clínico: ${error.message}`); }
+  };
+  if (!patient) return <section className="space-y-5"><div className="flex items-center justify-between"><h2 className="text-2xl font-bold text-slate-800">Historia Clínica</h2><button onClick={() => setPatientPickerOpen(true)} className="primary"><Search size={18}/> Seleccionar paciente</button></div><div className="grid min-h-80 place-items-center rounded-2xl border border-dashed border-slate-300 bg-white text-center"><div><BookOpen className="mx-auto text-hospital-600" size={42}/><p className="mt-4 font-bold text-slate-700">Seleccioná un paciente para consultar su historia clínica</p></div></div>{patientPickerOpen && <PatientSearchModal patients={patients} onSelect={choosePatient} onClose={() => setPatientPickerOpen(false)}/>}</section>;
+  const patientData = history?.patient || patient;
+  return <section className="space-y-5">
+    <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start"><div><h2 className="text-2xl font-bold text-slate-800">Historia Clínica</h2><p className="mt-1 text-slate-500">{patientData.apellido}, {patientData.nombre} · DNI {patientData.dni || "—"}</p></div><div className="flex gap-3"><button onClick={() => setPatientPickerOpen(true)} className="secondary"><Search size={17}/> Cambiar paciente</button>{canCreate && <button onClick={() => { setRecord({ ...emptyRecord(), pacienteId: patient.codigo }); setCreating(true); }} className="primary"><ClipboardPlus size={18}/> Nueva atención</button>}</div></div>
+    {loading ? <div className="rounded-2xl border bg-white p-16 text-center text-slate-400">Cargando historia clínica...</div> : <>
+      <div className="grid gap-3 sm:grid-cols-3"><div className="rounded-2xl border bg-white p-4"><p className="text-xs font-bold uppercase text-slate-500">Registros clínicos</p><p className="mt-2 text-2xl font-bold">{history?.records?.length || 0}</p></div><div className="rounded-2xl border bg-white p-4"><p className="text-xs font-bold uppercase text-slate-500">Turnos</p><p className="mt-2 text-2xl font-bold">{history?.appointments?.length || 0}</p></div><div className="rounded-2xl border bg-white p-4"><p className="text-xs font-bold uppercase text-slate-500">Cabos asociados</p><p className="mt-2 text-2xl font-bold">{history?.cabos?.length || 0}</p></div></div>
+      <div className="grid gap-5 xl:grid-cols-[1.15fr_.85fr]">
+        <div className="space-y-5"><div className="rounded-2xl border bg-white p-5"><h3 className="font-bold text-slate-800">Evoluciones y atenciones</h3><div className="mt-4 space-y-3">{(history?.records || []).map((item) => <article key={item.id} className="rounded-xl border border-slate-200 p-4"><div className="flex flex-wrap justify-between gap-2"><p className="font-bold text-hospital-700">{String(item.fechaAtencion).replace("T", " ")}</p><span className="text-sm text-slate-500">{item.profesional || "Profesional no especificado"}</span></div><p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700">{item.descripcion}</p>{item.pedidosMedicos && <div className="mt-3 rounded-lg bg-amber-50 p-3 text-sm"><strong>Pedidos médicos:</strong> {item.pedidosMedicos}</div>}{item.laboratorio && <div className="mt-2 rounded-lg bg-cyan-50 p-3 text-sm"><strong>Laboratorio:</strong> {item.laboratorio}</div>}<p className="mt-3 text-xs text-slate-400">Registrado por {item.registradoPor || "Usuario"}{item.turnoId ? ` · Turno #${item.turnoId}` : ""}{item.caboId ? ` · Cabo #${item.caboId}` : ""}</p></article>)}{!history?.records?.length && <p className="rounded-xl border border-dashed p-8 text-center text-sm text-slate-400">Todavía no hay evoluciones registradas.</p>}</div></div>
+        <div className="rounded-2xl border bg-white p-5"><h3 className="font-bold text-slate-800">Turnos del paciente</h3><div className="mt-4 space-y-2">{(history?.appointments || []).map((item) => <div key={item.id} className="rounded-xl bg-slate-50 p-3"><div className="flex justify-between gap-3"><strong className="text-sm">{formatDate(item.fecha)} · {item.hora}</strong><span className="text-xs font-semibold text-hospital-700">{item.estado}</span></div><p className="mt-1 text-sm text-slate-600">{item.profesional || "Sin profesional"}</p><p className="text-xs text-slate-400">{item.motivo || "Sin motivo registrado"}</p></div>)}{!history?.appointments?.length && <p className="text-sm text-slate-400">Sin turnos registrados.</p>}</div></div></div>
+        <div className="rounded-2xl border bg-white p-5"><h3 className="font-bold text-slate-800">Cabos y prestaciones</h3><div className="mt-4 space-y-3">{(history?.cabos || []).map((item) => <article key={item.id} className="rounded-xl border p-4"><div className="flex flex-wrap justify-between gap-2"><strong className="text-hospital-700">Cabo N° {item.numero}</strong><span className="text-sm text-slate-500">{formatDate(item.fecha)} · {item.tipoAtencion}</span></div><p className="mt-2 text-sm"><strong>Profesional:</strong> {item.profesionales || "No especificado"}</p>{item.prestaciones && <p className="mt-1 text-sm text-slate-600"><strong>Prestaciones:</strong> {item.prestaciones}</p>}{item.diagnosticos && <p className="mt-1 text-sm text-slate-600"><strong>Diagnósticos:</strong> {item.diagnosticos}</p>}{item.laboratorio && <p className="mt-1 text-sm text-slate-600"><strong>Laboratorio:</strong> {item.laboratorio}</p>}</article>)}{!history?.cabos?.length && <p className="text-sm text-slate-400">Sin Cabos asociados.</p>}</div></div>
+      </div>
+    </>}
+    {creating && <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/50 p-4"><form onSubmit={submit} className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white shadow-2xl"><div className="flex items-center justify-between border-b p-5"><div><p className="text-xs font-bold uppercase text-hospital-600">Historia clínica</p><h3 className="text-xl font-bold">Nueva atención</h3></div><button type="button" onClick={() => setCreating(false)} className="p-2 text-slate-400"><X/></button></div><div className="grid gap-4 p-5 sm:grid-cols-2"><Field label="Fecha y hora" required><input type="datetime-local" value={record.fechaAtencion} onChange={(e) => setRecord({...record,fechaAtencion:e.target.value})} className="control"/></Field><Field label="Profesional"><select value={record.profesionalId} onChange={(e) => setRecord({...record,profesionalId:e.target.value})} className="control"><option value="">Sin especificar</option>{professionals.map((item) => <option key={item.codigo} value={item.codigo}>{item.apellido}, {item.nombre}</option>)}</select></Field><Field label="Turno relacionado"><select value={record.turnoId} onChange={(e) => setRecord({...record,turnoId:e.target.value})} className="control"><option value="">Sin vincular</option>{(history?.appointments || []).map((item) => <option key={item.id} value={item.id}>{formatDate(item.fecha)} {item.hora} · {item.profesional}</option>)}</select></Field><Field label="Cabo relacionado"><select value={record.caboId} onChange={(e) => setRecord({...record,caboId:e.target.value})} className="control"><option value="">Sin vincular</option>{(history?.cabos || []).map((item) => <option key={item.id} value={item.id}>Cabo {item.numero} · {formatDate(item.fecha)}</option>)}</select></Field><Field label="Descripción de la atención" required className="sm:col-span-2"><textarea rows="5" value={record.descripcion} onChange={(e) => setRecord({...record,descripcion:e.target.value})} className="control resize-y" placeholder="Evolución, evaluación y conducta..."/></Field><Field label="Pedidos médicos" className="sm:col-span-2"><textarea rows="3" value={record.pedidosMedicos} onChange={(e) => setRecord({...record,pedidosMedicos:e.target.value})} className="control resize-y"/></Field><Field label="Indicaciones de laboratorio" className="sm:col-span-2"><textarea rows="3" value={record.laboratorio} onChange={(e) => setRecord({...record,laboratorio:e.target.value})} className="control resize-y"/></Field></div><div className="flex justify-end gap-3 border-t p-4"><button type="button" onClick={() => setCreating(false)} className="secondary">Cancelar</button><button className="primary">Guardar en historia clínica</button></div></form></div>}
+    {patientPickerOpen && <PatientSearchModal patients={patients} onSelect={choosePatient} onClose={() => setPatientPickerOpen(false)}/>}</section>;
+}
+
 const permissionModules = [
   ["appointments", "Turnos"], ["cabos", "CABOS"], ["cobros-os", "Cobros O. Social"],
   ["liquidacion-obra-social", "Liquidación Obra Social"], ["liquidacion-profesionales", "Liquidación Profesionales"], ["liquidacion-personal", "Liquidación Personal"],
-  ["patients", "Pacientes"], ["professionals", "Profesionales"], ["personnel", "Personal"], ["medications", "Medicamentos"],
+  ["patients", "Pacientes"], ["clinical-history", "Historia Clínica"], ["professionals", "Profesionales"], ["personnel", "Personal"], ["medications", "Medicamentos"],
   ["health-insurances", "Obras sociales"], ["nomenclature", "Nomenclador"], ["users", "Usuarios y permisos"],
 ];
 const permissionActions = [["view", "Ver"], ["create", "Crear"], ["edit", "Editar"], ["delete", "Eliminar"], ["print", "Imprimir"]];
@@ -5973,6 +6046,14 @@ function Dashboard({ onLogout, currentUser }) {
           {!collapsed && <span className="font-semibold">Pacientes</span>}
         </button>
         <button
+          onClick={() => goTo("clinical-history")}
+          hidden={!can("clinical-history")}
+          className={`flex w-full items-center rounded-xl py-2.5 ${module === "clinical-history" ? "bg-hospital-50 text-hospital-700" : "text-slate-500 hover:bg-slate-50"} ${collapsed ? "justify-center" : "gap-3 px-3"}`}
+        >
+          <BookOpen size={21} />
+          {!collapsed && <span className="font-semibold">Historia Clínica</span>}
+        </button>
+        <button
           onClick={() => goTo("professionals")}
           hidden={!can("professionals")}
           className={`flex w-full items-center rounded-xl py-2.5 ${module === "professionals" ? "bg-hospital-50 text-hospital-700" : "text-slate-500 hover:bg-slate-50"} ${collapsed ? "justify-center" : "gap-3 px-3"}`}
@@ -6067,6 +6148,11 @@ function Dashboard({ onLogout, currentUser }) {
           setView("form");
         }}
         onDelete={deletePatient}
+        onHistory={can("clinical-history") ? (p) => {
+          setSelectedPatient(p);
+          setModule("clinical-history");
+          setView("list");
+        } : null}
       />
     ) : (
       <PatientForm
@@ -6472,11 +6558,22 @@ function Dashboard({ onLogout, currentUser }) {
       }}
     />
   );
+  const clinicalHistoryContent = (
+    <ClinicalHistory
+      patients={patients}
+      initialPatient={selectedPatient}
+      professionals={professionals}
+      canCreate={can("clinical-history", "create")}
+      onNotice={(message) => { setNotice(message); setTimeout(() => setNotice(""), 5000); }}
+    />
+  );
   const personnelContent =
     module === "users"
       ? <UsersManagement onNotice={(message)=>{setNotice(message);setTimeout(()=>setNotice(""),4000);}} />
       : module === "appointments"
       ? appointmentContent
+      : module === "clinical-history"
+        ? clinicalHistoryContent
       : module === "medications"
         ? medicationContent
         : module === "health-insurances"
@@ -6501,6 +6598,7 @@ function Dashboard({ onLogout, currentUser }) {
     "liquidacion-profesionales": { title: "Liquidación de Profesionales", intro: "Calculá lo producido y el importe a cobrar por cada profesional.", steps: [["Definí el período", "La búsqueda toma los cobros registrados dentro de esas fechas."], ["Revisá los cálculos", "Controlá producido, descuento, porcentaje de cobro y total."], ["Consultá el detalle", "Analizalo por práctica o agrupado por obra social antes de imprimir."]], tip: "El porcentaje de cobro surge de la configuración registrada para cada profesional." },
     "liquidacion-personal": { title: "Liquidación de Personal", intro: "Distribuí entre el personal el porcentaje correspondiente del neto cobrado.", steps: [["Elegí el período", "Se calcula el bruto cobrado por las obras sociales."], ["Controlá el fondo", "Revisá el descuento del 18%, el neto y el 10% destinado al personal."], ["Revisá e imprimí", "Verificá la distribución en partes iguales antes de generar el PDF."]], tip: "Confirmá que todos los cobros del período estén registrados antes de liquidar." },
     patients: { title: "Pacientes", intro: "Administrá los datos personales, de contacto y cobertura de los pacientes.", steps: [["Buscá al paciente", "Usá nombre, DNI, código u obra social."], ["Creá o modificá", "Completá los campos obligatorios y la información de afiliación."], ["Consultá el detalle", "Verificá los datos registrados antes de utilizarlos en una atención."]], tip: "Comprobá el DNI antes de crear un paciente para evitar registros duplicados." },
+    "clinical-history": { title: "Historia Clínica", intro: "Consultá en un solo lugar los antecedentes de atención del paciente.", steps: [["Seleccioná al paciente", "Accedé desde el módulo o desde la acción disponible en Pacientes."], ["Revisá sus antecedentes", "Consultá turnos, profesionales, Cabos, prestaciones, diagnósticos y laboratorio."], ["Registrá la atención", "Agregá la evolución, pedidos médicos y solicitudes de laboratorio."]], tip: "Cada registro queda asociado al usuario que lo creó y no reemplaza los datos originales de Turnos o Cabos." },
     professionals: { title: "Profesionales", intro: "Gestioná profesionales, matrículas, especialidades y porcentajes de cobro.", steps: [["Buscá al profesional", "Filtrá por nombre, DNI, matrícula o especialidad."], ["Completá sus datos", "Registrá identificación, contacto, matrícula y especialidad."], ["Configurá el porcentaje", "Indicá el porcentaje usado en su liquidación."]], tip: "La configuración del profesional impacta directamente en la liquidación correspondiente." },
     personnel: { title: "Personal", intro: "Administrá la nómina de personal incluida en la distribución de liquidaciones.", steps: [["Buscá a la persona", "Filtrá por nombre, DNI, código o área."], ["Registrá sus datos", "Completá identificación, contacto, domicilio y área."], ["Mantené la nómina actualizada", "Corregí o eliminá registros que ya no correspondan."]], tip: "La cantidad de personas registradas interviene en el reparto de la liquidación de personal." },
     medications: { title: "Medicamentos", intro: "Mantené actualizado el catálogo utilizado en las atenciones.", steps: [["Buscá el medicamento", "Localizalo por código o descripción."], ["Creá o editá", "Registrá una descripción clara y el código correspondiente."], ["Eliminá con precaución", "Comprobá que el registro no sea necesario para nuevas cargas."]], tip: "Usá descripciones uniformes para facilitar la búsqueda durante la carga de cabos." },
