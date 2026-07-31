@@ -1,0 +1,38 @@
+
+› el proyecto es una migracion de un proyecto existente, realizado en visual studio .net, desarrollado en visual .net, tiene una base de datos integrada en servidor
+  local de sqlserver. se puede utilizar esa misma base de datos para no perder los datos cargados en el sistema anterior, ya que son años de carga en ese sistema
+
+
+• Sí, se puede reutilizar la base de datos SQL Server existente y conservar todos los años de información. De hecho, suele ser la estrategia más segura para una
+  migración, siempre que se haga de forma controlada.
+
+  La nueva aplicación deberá conectarse a SQL Server mediante un backend o API; el navegador no debe acceder directamente a la base de datos. Hay que verificar:
+
+  - La versión y edición actual de SQL Server.
+  - El esquema: tablas, claves, relaciones, vistas y tipos de datos.
+  - Procedimientos almacenados, funciones, triggers y tareas programadas.
+  - Cómo almacena contraseñas, documentos, imágenes e historiales.
+  - Compatibilidad entre los identificadores y reglas del sistema anterior y el nuevo.
+  - Volumen de datos, integridad, duplicados y registros antiguos inconsistentes.
+
+  Una estrategia recomendable sería:
+
+  1. Hacer un backup completo y verificado de la base actual.
+  2. Restaurar una copia en un entorno de pruebas.
+  3. Conectar la nueva aplicación únicamente a esa copia.
+  4. Adaptar el backend al esquema existente o crear una capa de compatibilidad.
+  5. Aplicar migraciones de estructura sin borrar ni sobrescribir información.
+  6. Comparar cantidades, totales y casos clínicos entre ambos sistemas.
+  7. Probar con usuarios reales antes del cambio definitivo.
+  8. Programar una ventana final de migración y conservar una forma de volver al sistema anterior.
+  anonimizada si contiene información clínica sensible.
+
+  Hay dos alternativas:
+
+  - Mantener la estructura actual: reduce el riesgo inicial y permite avanzar más rápido, pero puede conservar decisiones antiguas difíciles de mantener.
+  - Crear una estructura nueva y migrar los datos: permite mejorar el diseño, pero requiere transformar y validar cuidadosamente cada registro.
+
+  También puede hacerse de forma híbrida: reutilizar inicialmente la base actual y modernizarla gradualmente mediante migraciones versionadas.
+
+  Para determinar el camino correcto habría que revisar el esquema SQL Server y cómo está construida la aplicación nueva. No necesitamos acceder a datos clínicos
+  reales: alcanza con el script de estructura de la base, idealmente generado sin datos, y una descripción de la versión de SQL Server.

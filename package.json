@@ -1,0 +1,24 @@
+{
+  "name": "gestion-hospitalaria",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:api": "dotnet run --project server/Hospital.Api.csproj --no-restore",
+    "build": "vite build",
+    "build:api": "dotnet build server/Hospital.Api.csproj",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@tailwindcss/vite": "latest",
+    "lucide-react": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "tailwindcss": "latest"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "latest",
+    "vite": "latest"
+  }
+}

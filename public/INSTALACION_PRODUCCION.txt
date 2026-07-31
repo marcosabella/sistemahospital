@@ -1,0 +1,436 @@
+SISTEMA DE GESTIÓN HOSPITALARIA
+GUÍA DE INSTALACIÓN EN PRODUCCIÓN
+=================================
+
+Esta guía corresponde a una instalación en Windows utilizando:
+
+- XAMPP/Apache para publicar el frontend.
+- ASP.NET Core para ejecutar la API.
+- Microsoft SQL Server para la base de datos.
+
+
+1. REQUISITOS
+=============
+
+Instalar en la computadora servidor:
+
+- SQL Server con la base de datos bdHospital restaurada y actualizada.
+- XAMPP con Apache.
+- ASP.NET Core Runtime 8 para Windows (Hosting Bundle recomendado).
+- Permisos de administrador para configurar Apache y el inicio automático.
+
+La computadora debe tener una dirección IP fija o una reserva de IP en el
+router si otras computadoras accederán al sistema por la red local.
+
+
+2. CARPETAS RECOMENDADAS
+========================
+
+Frontend:
+
+    C:\xampp\htdocs\Sistema Hospital\
+
+API (siempre fuera de htdocs):
+
+    C:\SistemaHospital\publish-api\
+
+Estructura esperada del frontend:
+
+    C:\xampp\htdocs\Sistema Hospital\index.html
+    C:\xampp\htdocs\Sistema Hospital\assets\
+
+Estructura esperada de la API:
+
+    C:\SistemaHospital\publish-api\Hospital.Api.exe
+    C:\SistemaHospital\publish-api\Hospital.Api.dll
+    C:\SistemaHospital\publish-api\appsettings.json
+    C:\SistemaHospital\publish-api\Migrations\
+
+IMPORTANTE: no colocar publish-api dentro de htdocs. appsettings.json contiene
+la configuración de acceso a la base de datos y no debe quedar publicado por
+Apache.
+
+
+3. GENERAR LOS ARCHIVOS DE PUBLICACIÓN
+======================================
+
+Ejecutar desde la raíz del proyecto de desarrollo.
+
+Frontend:
+
+    npm install
+    npm run build
+
+El resultado se genera en:
+
+    dist\
+
+API:
+
+    dotnet restore .\server\Hospital.Api.csproj
+    dotnet publish .\server\Hospital.Api.csproj -c Release -o .\publish-api
+
+El resultado se genera en:
+
+    publish-api\
+
+
+4. COPIAR EL FRONTEND
+=====================
+
+Copiar EL CONTENIDO de dist, no la carpeta dist completa, a:
+
+    C:\xampp\htdocs\Sistema Hospital\
+
+La aplicación se abrirá en:
+
+    http://localhost/Sistema%20Hospital/
+
+Desde otra computadora de la red:
+
+    http://IP-DEL-SERVIDOR/Sistema%20Hospital/
+
+Ejemplo:
+
+    http://192.168.1.20/Sistema%20Hospital/
+
+
+5. COPIAR Y CONFIGURAR LA API
+=============================
+
+Copiar el contenido de publish-api a:
+
+    C:\SistemaHospital\publish-api\
+
+Editar:
+
+    C:\SistemaHospital\publish-api\appsettings.json
+
+Ejemplo para SQL Express local con autenticación de Windows:
+
+    {
+      "ConnectionStrings": {
+        "Hospital": "Server=NOMBRE-PC\\SQLEXPRESS;Database=bdHospital;Integrated Security=True;Encrypt=False;TrustServerCertificate=True;Application Name=GestionHospitalApi"
+      },
+      "Logging": {
+        "LogLevel": {
+          "Default": "Information",
+          "Microsoft.AspNetCore": "Warning"
+        }
+      },
+      "AllowedHosts": "*"
+    }
+
+Reemplazar NOMBRE-PC y SQLEXPRESS por el servidor y la instancia utilizados
+para conectarse desde SQL Server Management Studio.
+
+Ejemplos de servidor:
+
+    Server=.\\SQLEXPRESS
+    Server=NOMBRE-PC\\SQLEXPRESS
+    Server=.
+    Server=NOMBRE-PC
+
+Con Integrated Security=True, la cuenta de Windows que ejecuta Hospital.Api
+debe tener permisos sobre bdHospital.
+
+
+6. MIGRACIONES DE BASE DE DATOS
+===============================
+
+La API ejecuta automáticamente, al iniciar, los archivos SQL incluidos en:
+
+    C:\SistemaHospital\publish-api\Migrations\
+
+Las migraciones crean o actualizan las estructuras adicionales del sistema,
+incluyendo usuarios, permisos y sesiones.
+
+Antes de iniciar por primera vez en producción:
+
+1. Realizar una copia de seguridad completa de bdHospital.
+2. Confirmar que la carpeta Migrations se haya copiado con publish-api.
+3. Iniciar la API con una cuenta que pueda modificar la estructura de la base.
+4. Revisar que la API no muestre errores durante el inicio.
+
+No ejecutar manualmente una migración ya aplicada sin revisar previamente su
+contenido y estado.
+
+
+7. CONFIGURAR APACHE COMO PROXY DE LA API
+=========================================
+
+Editar:
+
+    C:\xampp\apache\conf\httpd.conf
+
+Comprobar que estas líneas estén habilitadas, sin # al comienzo:
+
+    LoadModule proxy_module modules/mod_proxy.so
+    LoadModule proxy_http_module modules/mod_proxy_http.so
+
+Después de "ServerName localhost:80", agregar:
+
+    ProxyRequests Off
+    ProxyPreserveHost On
+    ProxyPass "/api/" "http://127.0.0.1:5080/api/"
+    ProxyPassReverse "/api/" "http://127.0.0.1:5080/api/"
+
+No duplicar estas directivas en otras partes del archivo.
+
+Validar la configuración:
+
+    C:\xampp\apache\bin\httpd.exe -t
+
+El resultado esperado es:
+
+    Syntax OK
+
+Comprobar módulos:
+
+    C:\xampp\apache\bin\httpd.exe -M | Select-String proxy
+
+Deben aparecer proxy_module y proxy_http_module.
+
+Si Apache no está instalado como servicio, reiniciarlo con Stop y Start desde
+el panel de XAMPP. El comando httpd.exe -k restart solamente funciona cuando
+Apache está instalado como servicio.
+
+
+8. INICIAR LA API MANUALMENTE
+=============================
+
+Abrir PowerShell como administrador y ejecutar:
+
+    cd "C:\SistemaHospital\publish-api"
+    .\Hospital.Api.exe --urls "http://127.0.0.1:5080"
+
+Mantener esa consola abierta mientras se utiliza el sistema.
+
+La salida debe incluir:
+
+    Now listening on: http://127.0.0.1:5080
+    Application started
+
+Si aparece "address already in use", localizar el proceso existente:
+
+    $conexion = Get-NetTCPConnection -LocalPort 5080 -State Listen
+    Get-Process -Id $conexion.OwningProcess
+
+Detenerlo solamente después de confirmar que se trata de Hospital.Api:
+
+    Stop-Process -Id $conexion.OwningProcess
+
+
+9. CONFIGURAR INICIO AUTOMÁTICO DE LA API
+=========================================
+
+Opción recomendada sin instalar programas adicionales: Programador de tareas.
+
+1. Abrir "Programador de tareas" como administrador.
+2. Seleccionar "Crear tarea" (no "Crear tarea básica").
+3. Nombre: Hospital API.
+4. Marcar "Ejecutar tanto si el usuario inició sesión como si no".
+5. Marcar "Ejecutar con los privilegios más altos".
+6. Desencadenador: "Al iniciar el sistema".
+7. Agregar un retraso de 30 segundos para permitir que SQL Server inicie.
+8. Acción: "Iniciar un programa".
+9. Programa:
+
+       C:\SistemaHospital\publish-api\Hospital.Api.exe
+
+10. Argumentos:
+
+       --urls http://127.0.0.1:5080
+
+11. Iniciar en:
+
+       C:\SistemaHospital\publish-api
+
+12. En Condiciones, desmarcar restricciones de energía si el servidor debe
+    funcionar permanentemente.
+13. En Configuración, habilitar reinicio si la tarea falla.
+
+La cuenta seleccionada para la tarea debe tener permisos sobre bdHospital si
+se utiliza Integrated Security=True.
+
+También se puede utilizar NSSM para instalar la API como servicio, pero debe
+ser descargado, configurado y mantenido por el administrador del servidor.
+
+
+10. INICIO AUTOMÁTICO DE APACHE
+===============================
+
+Desde XAMPP Control Panel, ejecutar como administrador e instalar Apache como
+servicio utilizando la opción Service correspondiente. Verificar antes que
+el puerto 80 no esté ocupado por IIS u otro servidor web.
+
+Si Apache se administra desde XAMPP sin instalarlo como servicio, deberá
+iniciarse manualmente después de cada reinicio de Windows.
+
+
+11. PRUEBAS DE FUNCIONAMIENTO
+=============================
+
+Realizar las pruebas en este orden.
+
+1. API directa:
+
+       http://127.0.0.1:5080/api/health
+
+2. API a través de Apache:
+
+       http://localhost/api/health
+
+3. Frontend local:
+
+       http://localhost/Sistema%20Hospital/
+
+4. Frontend desde otra computadora:
+
+       http://IP-DEL-SERVIDOR/Sistema%20Hospital/
+
+La respuesta correcta de health debe ser similar a:
+
+    {
+      "status": "ok",
+      "database": {
+        "servidor": "NOMBRE-PC\\SQLEXPRESS",
+        "baseDatos": "bdHospital",
+        "version": "..."
+      }
+    }
+
+Después realizar estas pruebas funcionales:
+
+- Iniciar sesión.
+- Consultar pacientes, profesionales y cabos.
+- Crear y modificar un registro de prueba autorizado.
+- Verificar turnos y disponibilidad.
+- Consultar liquidaciones.
+- Abrir detalles y generar reportes PDF.
+- Probar permisos con un usuario no administrador.
+- Cerrar sesión e ingresar nuevamente.
+
+
+12. ACCESO DESDE OTRAS COMPUTADORAS
+===================================
+
+Permitir en Firewall de Windows el acceso entrante a Apache por el puerto 80
+solamente para redes privadas.
+
+No es necesario publicar el puerto 5080 en la red: Apache se comunica con la
+API mediante 127.0.0.1 y los clientes utilizan el puerto 80.
+
+Asignar al servidor una IP fija o una reserva DHCP para que la dirección no
+cambie.
+
+No exponer el sistema directamente a Internet sin HTTPS, control de acceso,
+firewall y revisión de seguridad profesional.
+
+
+13. ACTUALIZAR EL SISTEMA
+=========================
+
+Antes de actualizar:
+
+1. Realizar una copia de seguridad de bdHospital.
+2. Conservar una copia del frontend y publish-api actualmente operativos.
+3. Conservar una copia del appsettings.json de producción.
+
+Actualizar frontend:
+
+1. Generar npm run build.
+2. Reemplazar index.html y assets en:
+
+       C:\xampp\htdocs\Sistema Hospital\
+
+3. En los navegadores ejecutar Ctrl + F5.
+
+Actualizar API:
+
+1. Detener la tarea o proceso Hospital.Api.
+2. Copiar la nueva publicación en una carpeta temporal.
+3. Conservar o volver a aplicar el appsettings.json de producción.
+4. Confirmar que se copió la carpeta Migrations.
+5. Reemplazar los archivos de publish-api.
+6. Iniciar nuevamente la API.
+7. Probar /api/health y el inicio de sesión.
+
+No reemplazar archivos de la API mientras Hospital.Api.exe está en ejecución.
+
+
+14. COPIAS DE SEGURIDAD
+=======================
+
+Configurar copias automáticas de SQL Server y verificar periódicamente que
+puedan restaurarse.
+
+Conservar también copias de:
+
+- C:\SistemaHospital\publish-api\appsettings.json
+- C:\xampp\apache\conf\httpd.conf
+- C:\xampp\htdocs\Sistema Hospital\
+- Scripts de migración y archivos de publicación utilizados.
+
+Las copias de seguridad deben almacenarse también fuera de la computadora
+servidor.
+
+
+15. RESOLUCIÓN DE PROBLEMAS
+===========================
+
+ERROR 500 EN 127.0.0.1:5080/api/health
+
+La API funciona, pero no puede consultar SQL Server. Revisar appsettings.json,
+nombre de instancia, nombre de base, servicio SQL Server y permisos.
+
+NOT FOUND EN localhost/api/health
+
+Apache no está aplicando ProxyPass. Revisar módulos, ubicación de las
+directivas, validar httpd.conf y reiniciar Apache completamente.
+
+SERVICE UNAVAILABLE EN localhost/api/health
+
+Apache aplica el proxy, pero Hospital.Api no está funcionando en 127.0.0.1:5080.
+Iniciar primero la API y después reiniciar Apache.
+
+ADDRESS ALREADY IN USE
+
+Ya existe un proceso escuchando en el puerto 5080. Identificarlo antes de
+detenerlo.
+
+LA PÁGINA ABRE PERO NO CARGA ESTILOS O JAVASCRIPT
+
+Confirmar que index.html y assets sean del mismo build y estén directamente
+dentro de C:\xampp\htdocs\Sistema Hospital. Regenerar el frontend con la
+configuración base relativa y actualizar con Ctrl + F5.
+
+EL LOGIN NO FUNCIONA, PERO HEALTH RESPONDE
+
+Probar el endpoint de login, confirmar que las migraciones fueron aplicadas y
+verificar que el usuario esté activo. Revisar la consola de Hospital.Api y el
+registro de Apache:
+
+    C:\xampp\apache\logs\error.log
+
+SQL SERVER MANAGEMENT STUDIO
+
+No necesita estar abierto para utilizar el sistema. Debe estar iniciado el
+servicio correspondiente de SQL Server.
+
+
+16. SEGURIDAD
+=============
+
+- No compartir contraseñas administrativas en archivos o capturas.
+- No publicar appsettings.json mediante Apache.
+- Utilizar una cuenta específica y permisos mínimos para ejecutar la API.
+- Crear usuarios individuales; no compartir el usuario administrador.
+- Aplicar permisos por módulo y función.
+- Mantener Windows, SQL Server, .NET y Apache actualizados.
+- Utilizar HTTPS si el sistema se expone fuera de una red local controlada.
+- Revisar periódicamente usuarios activos y permisos asignados.
+
+
+FIN DE LA GUÍA
+==============
