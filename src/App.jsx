@@ -5,6 +5,7 @@ import {
   logout as endSession,
   loadUsers,
   saveUser as persistUser,
+  saveRole as persistRole,
   deleteHealthInsurance as removeHealthInsurance,
   deleteMedication as removeMedication,
   deleteAvailability as removeAvailability,
@@ -1302,7 +1303,7 @@ function PatientForm({
   );
 }
 
-function PatientList({ patients, onNew, onView, onEdit, onDelete, onHistory }) {
+function PatientList({ patients, onNew, onView, onEdit, onDelete, onHistory, canCreate, canEdit, canDelete }) {
   const [query, setQuery] = useState("");
   const filtered = patients.filter((p) =>
     `${p.nombre} ${p.apellido} ${p.dni} ${p.codigo}`
@@ -1318,9 +1319,9 @@ function PatientList({ patients, onNew, onView, onEdit, onDelete, onHistory }) {
             Pacientes
           </h2>
         </div>
-        <button onClick={onNew} className="primary">
+        {canCreate && <button onClick={onNew} className="primary">
           <Plus size={18} /> Nuevo paciente
-        </button>
+        </button>}
       </div>
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-100 p-5">
@@ -1376,20 +1377,20 @@ function PatientList({ patients, onNew, onView, onEdit, onDelete, onHistory }) {
                         >
                           <Eye size={18} />
                         </button>
-                        <button
+                        {canEdit && <button
                           onClick={() => onEdit(p)}
                           className="rounded-lg p-2 text-slate-400 hover:bg-amber-50 hover:text-amber-600"
                           title="Modificar"
                         >
                           <Pencil size={18} />
-                        </button>
-                        <button
+                        </button>}
+                        {canDelete && <button
                           onClick={() => onDelete(p)}
                           className="rounded-lg p-2 text-slate-400 hover:bg-red-50 hover:text-red-600"
                           title="Borrar"
                         >
                           <Trash2 size={18} />
-                        </button>
+                        </button>}
                       </div>
                     </td>
                   </tr>
@@ -1413,7 +1414,7 @@ function PatientList({ patients, onNew, onView, onEdit, onDelete, onHistory }) {
                   ? "Probá con otro nombre, DNI o código."
                   : "Creá la primera ficha para comenzar a gestionar pacientes."}
               </p>
-              {!query && (
+              {!query && canCreate && (
                 <button
                   onClick={onNew}
                   className="mt-5 text-sm font-bold text-hospital-600 hover:text-hospital-700"
@@ -4565,7 +4566,7 @@ function AppointmentForm({
     if (Object.keys(next).length) return;
     onSave({
       ...data,
-      id: data.id || `TUR-${Date.now()}`,
+      id: data.id || null,
       duracion: Number(data.duracion),
     });
   };
@@ -4707,6 +4708,8 @@ function AppointmentForm({
           >
             <option>Programado</option>
             <option>Confirmado</option>
+            <option>En espera</option>
+            <option>En atención</option>
             <option>Atendido</option>
             <option>Ausente</option>
             <option>Cancelado</option>
@@ -4773,11 +4776,16 @@ function AppointmentsModule({
   availability,
   setAvailability,
   onNotice,
+  currentUser,
+  onOpenHistory,
+  canEditAppointments,
 }) {
-  const [tab, setTab] = useState("agenda"),
+  const today = new Date().toISOString().slice(0, 10);
+  const isLinkedProfessional = Boolean(currentUser?.profesionalId) && !currentUser?.administrador;
+  const [tab, setTab] = useState(isLinkedProfessional ? "today" : "agenda"),
     [editing, setEditing] = useState(null),
-    [date, setDate] = useState(new Date().toISOString().slice(0, 10)),
-    [professional, setProfessional] = useState("");
+    [date, setDate] = useState(today),
+    [professional, setProfessional] = useState(isLinkedProfessional ? String(currentUser.profesionalId) : "");
   if (editing)
     return (
       <AppointmentForm
@@ -4800,17 +4808,24 @@ function AppointmentsModule({
   const filtered = appointments
     .filter(
       (item) =>
-        item.fecha === date &&
-        (!professional || item.profesionalCodigo === professional),
+        item.fecha === (tab === "today" ? today : date) &&
+        (!professional || String(item.profesionalCodigo) === String(professional)),
     )
     .sort((a, b) => a.hora.localeCompare(b.hora));
   const patientName = (code) => {
-    const p = patients.find((x) => x.codigo === code);
+    const p = patients.find((x) => String(x.codigo) === String(code));
     return p ? `${p.apellido}, ${p.nombre}` : "Paciente no disponible";
   };
   const professionalName = (code) => {
-    const p = professionals.find((x) => x.codigo === code);
+    const p = professionals.find((x) => String(x.codigo) === String(code));
     return p ? `${p.apellido}, ${p.nombre}` : "Profesional no disponible";
+  };
+  const changeStatus = async (item, estado) => {
+    try {
+      const saved = normalizeAppointment(await persistAppointment({ ...item, estado }));
+      setAppointments((current) => current.map((appointment) => appointment.id === saved.id ? saved : appointment));
+      onNotice(`Turno actualizado a ${estado}.`);
+    } catch (error) { onNotice(`No se pudo actualizar el turno: ${error.message}`); }
   };
   return (
     <>
@@ -4818,7 +4833,7 @@ function AppointmentsModule({
         <div>
           <h2 className="text-2xl font-bold text-slate-800">Turnos</h2>
         </div>
-        {tab === "agenda" && (
+        {tab === "agenda" && !isLinkedProfessional && (
           <button onClick={() => setEditing("new")} className="primary">
             <CalendarPlus size={18} /> Nuevo turno
           </button>
@@ -4826,17 +4841,23 @@ function AppointmentsModule({
       </div>
       <div className="mb-6 flex w-fit rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
         <button
+          onClick={() => setTab("today")}
+          className={`rounded-lg px-4 py-2 text-sm font-bold ${tab === "today" ? "bg-hospital-600 text-white" : "text-slate-500"}`}
+        >
+          Turnos de hoy
+        </button>
+        <button
           onClick={() => setTab("agenda")}
           className={`rounded-lg px-4 py-2 text-sm font-bold ${tab === "agenda" ? "bg-hospital-600 text-white" : "text-slate-500"}`}
         >
-          Agenda de turnos
+          Agenda completa
         </button>
-        <button
+        {!isLinkedProfessional && <button
           onClick={() => setTab("availability")}
           className={`rounded-lg px-4 py-2 text-sm font-bold ${tab === "availability" ? "bg-hospital-600 text-white" : "text-slate-500"}`}
         >
           Disponibilidad
-        </button>
+        </button>}
       </div>
       {tab === "availability" ? (
         <AvailabilityManager
@@ -4853,7 +4874,7 @@ function AppointmentsModule({
         />
       ) : (
         <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="grid gap-4 border-b border-slate-100 p-5 sm:grid-cols-2">
+          {tab === "agenda" ? <div className={`grid gap-4 border-b border-slate-100 p-5 ${isLinkedProfessional ? "sm:grid-cols-1" : "sm:grid-cols-2"}`}>
             <Field label="Fecha">
               <input
                 type="date"
@@ -4862,7 +4883,7 @@ function AppointmentsModule({
                 className="control"
               />
             </Field>
-            <Field label="Profesional">
+            {!isLinkedProfessional && <Field label="Profesional">
               <select
                 value={professional}
                 onChange={(e) => setProfessional(e.target.value)}
@@ -4875,8 +4896,8 @@ function AppointmentsModule({
                   </option>
                 ))}
               </select>
-            </Field>
-          </div>
+            </Field>}
+          </div> : <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-hospital-50 p-5"><div><p className="font-bold text-hospital-800">Agenda de hoy</p><p className="text-sm text-hospital-700">{new Intl.DateTimeFormat("es-AR", { weekday:"long", day:"2-digit", month:"long", year:"numeric" }).format(new Date())}</p></div><span className="rounded-full bg-white px-4 py-2 text-sm font-bold text-hospital-700">{filtered.length} turno{filtered.length === 1 ? "" : "s"}</span></div>}
           {filtered.length ? (
             <div className="divide-y divide-slate-100">
               {filtered.map((item) => (
@@ -4888,25 +4909,28 @@ function AppointmentsModule({
                     {item.hora}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="font-bold text-slate-700">
+                    <button type="button" onClick={() => onOpenHistory?.(item.pacienteCodigo)} className="font-bold text-slate-700 hover:text-hospital-700 hover:underline" title="Abrir historia clínica">
                       {patientName(item.pacienteCodigo)}
-                    </p>
+                    </button>
                     <p className="mt-1 text-sm text-slate-500">
                       {professionalName(item.profesionalCodigo)} ·{" "}
                       {item.motivo || "Consulta"} · {item.duracion} min
                     </p>
                   </div>
-                  <span
+                  {canEditAppointments && item.fecha === today ? <select value={item.estado} onChange={(event) => changeStatus(item,event.target.value)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold outline-none focus:border-hospital-500" title="Cambio rápido de estado">
+                    {["Programado","Confirmado","En espera","En atención","Atendido","Ausente","Cancelado"].map((estado)=><option key={estado}>{estado}</option>)}
+                  </select> : <span
                     className={`w-fit rounded-full px-3 py-1 text-xs font-bold ${item.estado === "Cancelado" ? "bg-red-50 text-red-600" : item.estado === "Atendido" ? "bg-emerald-50 text-emerald-700" : "bg-hospital-50 text-hospital-700"}`}
                   >
                     {item.estado}
-                  </span>
-                  <button
+                  </span>}
+                  {onOpenHistory && <button type="button" onClick={() => onOpenHistory(item.pacienteCodigo)} className="rounded-lg p-2 text-slate-400 hover:bg-cyan-50 hover:text-cyan-700" title="Historia clínica"><BookOpen size={18}/></button>}
+                  {!isLinkedProfessional && <button
                     onClick={() => setEditing(item)}
                     className="rounded-lg p-2 text-slate-400 hover:bg-amber-50 hover:text-amber-600"
                   >
                     <Pencil size={18} />
-                  </button>
+                  </button>}
                 </div>
               ))}
             </div>
@@ -4918,7 +4942,7 @@ function AppointmentsModule({
                   No hay turnos para esta fecha
                 </h3>
                 <p className="mt-2 text-sm text-slate-500">
-                  Podés crear uno nuevo desde el botón superior.
+                  {isLinkedProfessional ? "No tenés pacientes asignados para esta fecha." : "Podés crear uno nuevo desde el botón superior."}
                 </p>
               </div>
             </div>
@@ -5781,6 +5805,10 @@ function ClinicalHistory({ patients, initialPatient, professionals, canCreate, o
   const [history, setHistory] = useState(null);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [activeTab, setActiveTab] = useState("records");
+  const [caboDetail, setCaboDetail] = useState(null);
+  const [caboDetailLoading, setCaboDetailLoading] = useState(false);
+  const money = (value) => new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS" }).format(Number(value || 0));
   const localNow = () => {
     const now = new Date();
     return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
@@ -5805,6 +5833,7 @@ function ClinicalHistory({ patients, initialPatient, professionals, canCreate, o
     setRecord({ ...emptyRecord(), pacienteId: selected.codigo });
     setPatientPickerOpen(false);
     setCreating(false);
+    setActiveTab("records");
   };
   const submit = async (event) => {
     event.preventDefault();
@@ -5823,18 +5852,29 @@ function ClinicalHistory({ patients, initialPatient, professionals, canCreate, o
       onNotice("Registro agregado a la historia clínica.");
     } catch (error) { onNotice(`No se pudo guardar el registro clínico: ${error.message}`); }
   };
+  const showCaboDetail = async (cabo) => {
+    setCaboDetail({ cabo, data: null });
+    setCaboDetailLoading(true);
+    try { setCaboDetail({ cabo, data: await loadCaboDetails(cabo.id) }); }
+    catch (error) { setCaboDetail(null); onNotice(`No se pudo cargar el detalle del Cabo: ${error.message}`); }
+    finally { setCaboDetailLoading(false); }
+  };
   if (!patient) return <section className="space-y-5"><div className="flex items-center justify-between"><h2 className="text-2xl font-bold text-slate-800">Historia Clínica</h2><button onClick={() => setPatientPickerOpen(true)} className="primary"><Search size={18}/> Seleccionar paciente</button></div><div className="grid min-h-80 place-items-center rounded-2xl border border-dashed border-slate-300 bg-white text-center"><div><BookOpen className="mx-auto text-hospital-600" size={42}/><p className="mt-4 font-bold text-slate-700">Seleccioná un paciente para consultar su historia clínica</p></div></div>{patientPickerOpen && <PatientSearchModal patients={patients} onSelect={choosePatient} onClose={() => setPatientPickerOpen(false)}/>}</section>;
   const patientData = history?.patient || patient;
   return <section className="space-y-5">
     <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start"><div><h2 className="text-2xl font-bold text-slate-800">Historia Clínica</h2><p className="mt-1 text-slate-500">{patientData.apellido}, {patientData.nombre} · DNI {patientData.dni || "—"}</p></div><div className="flex gap-3"><button onClick={() => setPatientPickerOpen(true)} className="secondary"><Search size={17}/> Cambiar paciente</button>{canCreate && <button onClick={() => { setRecord({ ...emptyRecord(), pacienteId: patient.codigo }); setCreating(true); }} className="primary"><ClipboardPlus size={18}/> Nueva atención</button>}</div></div>
     {loading ? <div className="rounded-2xl border bg-white p-16 text-center text-slate-400">Cargando historia clínica...</div> : <>
       <div className="grid gap-3 sm:grid-cols-3"><div className="rounded-2xl border bg-white p-4"><p className="text-xs font-bold uppercase text-slate-500">Registros clínicos</p><p className="mt-2 text-2xl font-bold">{history?.records?.length || 0}</p></div><div className="rounded-2xl border bg-white p-4"><p className="text-xs font-bold uppercase text-slate-500">Turnos</p><p className="mt-2 text-2xl font-bold">{history?.appointments?.length || 0}</p></div><div className="rounded-2xl border bg-white p-4"><p className="text-xs font-bold uppercase text-slate-500">Cabos asociados</p><p className="mt-2 text-2xl font-bold">{history?.cabos?.length || 0}</p></div></div>
-      <div className="grid gap-5 xl:grid-cols-[1.15fr_.85fr]">
-        <div className="space-y-5"><div className="rounded-2xl border bg-white p-5"><h3 className="font-bold text-slate-800">Evoluciones y atenciones</h3><div className="mt-4 space-y-3">{(history?.records || []).map((item) => <article key={item.id} className="rounded-xl border border-slate-200 p-4"><div className="flex flex-wrap justify-between gap-2"><p className="font-bold text-hospital-700">{String(item.fechaAtencion).replace("T", " ")}</p><span className="text-sm text-slate-500">{item.profesional || "Profesional no especificado"}</span></div><p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700">{item.descripcion}</p>{item.pedidosMedicos && <div className="mt-3 rounded-lg bg-amber-50 p-3 text-sm"><strong>Pedidos médicos:</strong> {item.pedidosMedicos}</div>}{item.laboratorio && <div className="mt-2 rounded-lg bg-cyan-50 p-3 text-sm"><strong>Laboratorio:</strong> {item.laboratorio}</div>}<p className="mt-3 text-xs text-slate-400">Registrado por {item.registradoPor || "Usuario"}{item.turnoId ? ` · Turno #${item.turnoId}` : ""}{item.caboId ? ` · Cabo #${item.caboId}` : ""}</p></article>)}{!history?.records?.length && <p className="rounded-xl border border-dashed p-8 text-center text-sm text-slate-400">Todavía no hay evoluciones registradas.</p>}</div></div>
-        <div className="rounded-2xl border bg-white p-5"><h3 className="font-bold text-slate-800">Turnos del paciente</h3><div className="mt-4 space-y-2">{(history?.appointments || []).map((item) => <div key={item.id} className="rounded-xl bg-slate-50 p-3"><div className="flex justify-between gap-3"><strong className="text-sm">{formatDate(item.fecha)} · {item.hora}</strong><span className="text-xs font-semibold text-hospital-700">{item.estado}</span></div><p className="mt-1 text-sm text-slate-600">{item.profesional || "Sin profesional"}</p><p className="text-xs text-slate-400">{item.motivo || "Sin motivo registrado"}</p></div>)}{!history?.appointments?.length && <p className="text-sm text-slate-400">Sin turnos registrados.</p>}</div></div></div>
-        <div className="rounded-2xl border bg-white p-5"><h3 className="font-bold text-slate-800">Cabos y prestaciones</h3><div className="mt-4 space-y-3">{(history?.cabos || []).map((item) => <article key={item.id} className="rounded-xl border p-4"><div className="flex flex-wrap justify-between gap-2"><strong className="text-hospital-700">Cabo N° {item.numero}</strong><span className="text-sm text-slate-500">{formatDate(item.fecha)} · {item.tipoAtencion}</span></div><p className="mt-2 text-sm"><strong>Profesional:</strong> {item.profesionales || "No especificado"}</p>{item.prestaciones && <p className="mt-1 text-sm text-slate-600"><strong>Prestaciones:</strong> {item.prestaciones}</p>}{item.diagnosticos && <p className="mt-1 text-sm text-slate-600"><strong>Diagnósticos:</strong> {item.diagnosticos}</p>}{item.laboratorio && <p className="mt-1 text-sm text-slate-600"><strong>Laboratorio:</strong> {item.laboratorio}</p>}</article>)}{!history?.cabos?.length && <p className="text-sm text-slate-400">Sin Cabos asociados.</p>}</div></div>
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex overflow-x-auto border-b border-slate-200 bg-slate-50 p-1.5">
+          {[["records", "Evoluciones y atenciones", history?.records?.length || 0], ["appointments", "Turnos", history?.appointments?.length || 0], ["cabos", "Cabos", history?.cabos?.length || 0]].map(([id, label, count]) => <button key={id} type="button" onClick={() => setActiveTab(id)} className={`flex shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold ${activeTab === id ? "bg-white text-hospital-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>{label}<span className={`rounded-full px-2 py-0.5 text-xs ${activeTab === id ? "bg-hospital-100" : "bg-slate-200"}`}>{count}</span></button>)}
+        </div>
+        {activeTab === "records" && <div className="overflow-x-auto"><table className="w-full min-w-[1100px] text-sm"><thead className="bg-slate-50 text-left text-xs uppercase text-slate-500"><tr><th className="px-4 py-3">Fecha y hora</th><th className="px-4 py-3">Profesional</th><th className="px-4 py-3">Descripción</th><th className="px-4 py-3">Pedidos médicos</th><th className="px-4 py-3">Laboratorio</th><th className="px-4 py-3">Vínculos</th><th className="px-4 py-3">Registrado por</th></tr></thead><tbody className="divide-y divide-slate-100">{(history?.records || []).map((item) => <tr key={item.id} className="align-top hover:bg-slate-50"><td className="whitespace-nowrap px-4 py-3 font-semibold text-hospital-700">{String(item.fechaAtencion).replace("T", " ")}</td><td className="px-4 py-3">{item.profesional || "No especificado"}</td><td className="max-w-sm whitespace-pre-wrap px-4 py-3 text-slate-700">{item.descripcion}</td><td className="max-w-xs whitespace-pre-wrap px-4 py-3 text-slate-600">{item.pedidosMedicos || "—"}</td><td className="max-w-xs whitespace-pre-wrap px-4 py-3 text-slate-600">{item.laboratorio || "—"}</td><td className="whitespace-nowrap px-4 py-3 text-slate-500">{item.turnoId ? `Turno #${item.turnoId}` : ""}{item.turnoId && item.caboId ? " · " : ""}{item.caboId ? `Cabo #${item.caboId}` : ""}{!item.turnoId && !item.caboId ? "—" : ""}</td><td className="px-4 py-3 text-slate-500">{item.registradoPor || "Usuario"}</td></tr>)}{!history?.records?.length && <tr><td colSpan="7" className="p-14 text-center text-slate-400">Todavía no hay evoluciones registradas.</td></tr>}</tbody></table></div>}
+        {activeTab === "appointments" && <div className="overflow-x-auto"><table className="w-full min-w-[850px] text-sm"><thead className="bg-slate-50 text-left text-xs uppercase text-slate-500"><tr><th className="px-4 py-3">Fecha</th><th className="px-4 py-3">Hora</th><th className="px-4 py-3">Profesional</th><th className="px-4 py-3">Motivo</th><th className="px-4 py-3">Observaciones</th><th className="px-4 py-3">Estado</th></tr></thead><tbody className="divide-y divide-slate-100">{(history?.appointments || []).map((item) => <tr key={item.id} className="hover:bg-slate-50"><td className="whitespace-nowrap px-4 py-3 font-semibold">{formatDate(item.fecha)}</td><td className="px-4 py-3">{item.hora}</td><td className="px-4 py-3">{item.profesional || "Sin profesional"}</td><td className="px-4 py-3">{item.motivo || "—"}</td><td className="max-w-sm px-4 py-3 text-slate-500">{item.observaciones || "—"}</td><td className="px-4 py-3"><span className="rounded-full bg-hospital-50 px-3 py-1 text-xs font-semibold text-hospital-700">{item.estado}</span></td></tr>)}{!history?.appointments?.length && <tr><td colSpan="6" className="p-14 text-center text-slate-400">Sin turnos registrados.</td></tr>}</tbody></table></div>}
+        {activeTab === "cabos" && <div className="overflow-x-auto"><table className="w-full min-w-[1280px] text-sm"><thead className="bg-slate-50 text-left text-xs uppercase text-slate-500"><tr><th className="px-4 py-3">Cabo</th><th className="px-4 py-3">Fecha</th><th className="px-4 py-3">Atención</th><th className="px-4 py-3">Obra social</th><th className="px-4 py-3">Profesionales</th><th className="px-4 py-3">Prestaciones</th><th className="px-4 py-3">Diagnósticos</th><th className="px-4 py-3">Laboratorio</th><th className="px-4 py-3 text-right">Acciones</th></tr></thead><tbody className="divide-y divide-slate-100">{(history?.cabos || []).map((item) => <tr key={item.id} className="align-top hover:bg-slate-50"><td className="whitespace-nowrap px-4 py-3 font-semibold text-hospital-700">N° {item.numero}</td><td className="whitespace-nowrap px-4 py-3">{formatDate(item.fecha)}</td><td className="px-4 py-3">{item.tipoAtencion}</td><td className="px-4 py-3">{item.obraSocial || "Sin cobertura"}</td><td className="max-w-xs px-4 py-3">{item.profesionales || "No especificado"}</td><td className="max-w-sm px-4 py-3 text-slate-600">{item.prestaciones || "—"}</td><td className="max-w-sm px-4 py-3 text-slate-600">{item.diagnosticos || "—"}</td><td className="max-w-sm px-4 py-3 text-slate-600">{item.laboratorio || "—"}</td><td className="px-4 py-3 text-right"><button type="button" onClick={() => showCaboDetail(item)} className="rounded-lg p-2 text-hospital-700 hover:bg-hospital-50" title="Ver detalle del Cabo"><Eye size={18}/></button></td></tr>)}{!history?.cabos?.length && <tr><td colSpan="9" className="p-14 text-center text-slate-400">Sin Cabos asociados.</td></tr>}</tbody></table></div>}
       </div>
     </>}
+    {caboDetail && <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/50 p-4"><div className="flex max-h-[90vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"><div className="flex items-center justify-between border-b p-5"><div><p className="text-xs font-bold uppercase text-hospital-600">Detalle del Cabo</p><h3 className="text-xl font-bold">Cabo N° {caboDetail.cabo.numero}</h3><p className="text-sm text-slate-500">{formatDate(caboDetail.cabo.fecha)} · {caboDetail.cabo.tipoAtencion} · {caboDetail.cabo.obraSocial || "Sin cobertura"}</p></div><button type="button" onClick={() => setCaboDetail(null)} className="p-2 text-slate-400"><X/></button></div><div className="min-h-0 flex-1 overflow-y-auto p-5">{caboDetailLoading ? <p className="py-16 text-center text-slate-400">Cargando detalle...</p> : caboDetail.data && <div className="space-y-6"><div><h4 className="mb-2 font-bold text-slate-700">Prestaciones</h4><div className="overflow-x-auto rounded-xl border"><table className="w-full min-w-[850px] text-sm"><thead className="bg-slate-50 text-left text-xs uppercase text-slate-500"><tr><th className="px-4 py-3">Código</th><th className="px-4 py-3">Descripción</th><th className="px-4 py-3">Cantidad</th><th className="px-4 py-3">Profesional 1</th><th className="px-4 py-3">Profesional 2</th><th className="px-4 py-3 text-right">Arancel</th></tr></thead><tbody className="divide-y">{caboDetail.data.prestaciones.map((item, index) => <tr key={`${item.codigo}-${index}`}><td className="px-4 py-3 font-semibold">{item.codigo}</td><td className="px-4 py-3">{item.descripcion}</td><td className="px-4 py-3">{item.cantidad}</td><td className="px-4 py-3">{item.profesional1 || "—"}</td><td className="px-4 py-3">{item.profesional2 || "—"}</td><td className="px-4 py-3 text-right">{money(item.arancel)}</td></tr>)}{!caboDetail.data.prestaciones.length && <tr><td colSpan="6" className="p-8 text-center text-slate-400">Sin prestaciones.</td></tr>}</tbody></table></div></div><div className="grid gap-5 lg:grid-cols-3">{[["Diagnósticos", caboDetail.data.diagnosticos, (item) => `${item.codigo} · ${item.descripcion}${item.observaciones ? ` — ${item.observaciones}` : ""}`], ["Medicamentos", caboDetail.data.medicamentos, (item) => `${item.producto}${item.presentacion ? ` · ${item.presentacion}` : ""} · Cantidad ${item.cantidad}`], ["Laboratorio", caboDetail.data.laboratorio, (item) => `${item.codigo || ""} ${item.descripcion} · Cantidad ${item.cantidad} · ${money(item.monto)}`]].map(([title, items, render]) => <section key={title} className="rounded-xl border p-4"><h4 className="font-bold text-slate-700">{title}</h4><div className="mt-3 space-y-2">{items.length ? items.map((item, index) => <p key={index} className="rounded-lg bg-slate-50 p-3 text-sm text-slate-600">{render(item)}</p>) : <p className="text-sm text-slate-400">Sin registros.</p>}</div></section>)}</div></div>}</div><div className="flex justify-end border-t p-4"><button type="button" onClick={() => setCaboDetail(null)} className="primary">Cerrar</button></div></div></div>}
     {creating && <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/50 p-4"><form onSubmit={submit} className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white shadow-2xl"><div className="flex items-center justify-between border-b p-5"><div><p className="text-xs font-bold uppercase text-hospital-600">Historia clínica</p><h3 className="text-xl font-bold">Nueva atención</h3></div><button type="button" onClick={() => setCreating(false)} className="p-2 text-slate-400"><X/></button></div><div className="grid gap-4 p-5 sm:grid-cols-2"><Field label="Fecha y hora" required><input type="datetime-local" value={record.fechaAtencion} onChange={(e) => setRecord({...record,fechaAtencion:e.target.value})} className="control"/></Field><Field label="Profesional"><select value={record.profesionalId} onChange={(e) => setRecord({...record,profesionalId:e.target.value})} className="control"><option value="">Sin especificar</option>{professionals.map((item) => <option key={item.codigo} value={item.codigo}>{item.apellido}, {item.nombre}</option>)}</select></Field><Field label="Turno relacionado"><select value={record.turnoId} onChange={(e) => setRecord({...record,turnoId:e.target.value})} className="control"><option value="">Sin vincular</option>{(history?.appointments || []).map((item) => <option key={item.id} value={item.id}>{formatDate(item.fecha)} {item.hora} · {item.profesional}</option>)}</select></Field><Field label="Cabo relacionado"><select value={record.caboId} onChange={(e) => setRecord({...record,caboId:e.target.value})} className="control"><option value="">Sin vincular</option>{(history?.cabos || []).map((item) => <option key={item.id} value={item.id}>Cabo {item.numero} · {formatDate(item.fecha)}</option>)}</select></Field><Field label="Descripción de la atención" required className="sm:col-span-2"><textarea rows="5" value={record.descripcion} onChange={(e) => setRecord({...record,descripcion:e.target.value})} className="control resize-y" placeholder="Evolución, evaluación y conducta..."/></Field><Field label="Pedidos médicos" className="sm:col-span-2"><textarea rows="3" value={record.pedidosMedicos} onChange={(e) => setRecord({...record,pedidosMedicos:e.target.value})} className="control resize-y"/></Field><Field label="Indicaciones de laboratorio" className="sm:col-span-2"><textarea rows="3" value={record.laboratorio} onChange={(e) => setRecord({...record,laboratorio:e.target.value})} className="control resize-y"/></Field></div><div className="flex justify-end gap-3 border-t p-4"><button type="button" onClick={() => setCreating(false)} className="secondary">Cancelar</button><button className="primary">Guardar en historia clínica</button></div></form></div>}
     {patientPickerOpen && <PatientSearchModal patients={patients} onSelect={choosePatient} onClose={() => setPatientPickerOpen(false)}/>}</section>;
 }
@@ -5848,15 +5888,21 @@ const permissionModules = [
 const permissionActions = [["view", "Ver"], ["create", "Crear"], ["edit", "Editar"], ["delete", "Eliminar"], ["print", "Imprimir"]];
 
 function UsersManagement({ onNotice }) {
-  const [users,setUsers]=useState([]),[permissions,setPermissions]=useState([]),[selected,setSelected]=useState(null),[loading,setLoading]=useState(true);
-  const refresh=()=>{setLoading(true);loadUsers().then((data)=>{setUsers(data.users);setPermissions(data.permissions);}).catch((e)=>onNotice(`No se pudieron cargar los usuarios: ${e.message}`)).finally(()=>setLoading(false));};
+  const [data,setData]=useState({users:[],permissions:[],roles:[],rolePermissions:[],userRoles:[],professionals:[]});
+  const [selected,setSelected]=useState(null),[selectedRole,setSelectedRole]=useState(null),[loading,setLoading]=useState(true);
+  const refresh=()=>{setLoading(true);loadUsers().then(setData).catch((e)=>onNotice(`No se pudieron cargar los usuarios: ${e.message}`)).finally(()=>setLoading(false));};
   useEffect(refresh,[]);
-  const edit=(user)=>setSelected({...user,password:"",permisos:permissions.filter((p)=>Number(p.idUsuario)===Number(user.id)).map((p)=>({modulo:p.modulo,accion:p.accion}))});
-  const create=()=>setSelected({usuario:"",nombre:"",password:"",activo:true,administrador:false,permisos:[]});
-  const toggle=(modulo,accion)=>setSelected((current)=>{const exists=current.permisos.some((p)=>p.modulo===modulo&&p.accion===accion);return{...current,permisos:exists?current.permisos.filter((p)=>p.modulo!==modulo||p.accion!==accion):[...current.permisos,{modulo,accion}]};});
-  const save=async()=>{if(!selected.usuario.trim()||selected.usuario.includes("@")||(!selected.id&&selected.password.length<8)){onNotice("Ingresá un usuario sin @ y una contraseña de al menos 8 caracteres.");return;}try{await persistUser(selected);setSelected(null);refresh();onNotice("Usuario y permisos guardados correctamente.");}catch(e){onNotice(`No se pudo guardar el usuario: ${e.message}`);}};
-  if(selected)return <section className="space-y-5"><div className="flex items-center justify-between"><h2 className="text-2xl font-bold text-slate-800">{selected.id?"Modificar usuario":"Nuevo usuario"}</h2><button onClick={()=>setSelected(null)} className="rounded-xl border px-4 py-2 font-semibold">Volver</button></div><div className="grid gap-4 rounded-2xl border bg-white p-5 sm:grid-cols-2"><Field label="Nombre de usuario"><input value={selected.usuario} onChange={(e)=>setSelected({...selected,usuario:e.target.value.replace(/\s/g,"")})} className="control" placeholder="usuario" /></Field><Field label="Nombre y apellido"><input value={selected.nombre} onChange={(e)=>setSelected({...selected,nombre:e.target.value})} className="control" /></Field><Field label={selected.id?"Nueva contraseña (opcional)":"Contraseña"}><input type="password" value={selected.password} onChange={(e)=>setSelected({...selected,password:e.target.value})} className="control" /></Field><div className="flex items-center gap-6 pt-7"><label className="flex gap-2"><input type="checkbox" checked={selected.activo} onChange={(e)=>setSelected({...selected,activo:e.target.checked})}/> Activo</label><label className="flex gap-2"><input type="checkbox" checked={selected.administrador} onChange={(e)=>setSelected({...selected,administrador:e.target.checked})}/> Administrador</label></div></div>{!selected.administrador&&<div className="overflow-x-auto rounded-2xl border bg-white"><table className="w-full text-sm"><thead className="bg-slate-50"><tr><th className="px-4 py-3 text-left">Módulo</th>{permissionActions.map(([,label])=><th key={label} className="px-3 py-3">{label}</th>)}</tr></thead><tbody>{permissionModules.map(([modulo,label])=><tr key={modulo} className="border-t"><td className="px-4 py-3 font-semibold">{label}</td>{permissionActions.map(([accion])=><td key={accion} className="text-center"><input type="checkbox" checked={selected.permisos.some((p)=>p.modulo===modulo&&p.accion===accion)} onChange={()=>toggle(modulo,accion)}/></td>)}</tr>)}</tbody></table></div>}<div className="flex justify-end"><button onClick={save} className="primary">Guardar usuario</button></div></section>;
-  return <section className="space-y-5"><div className="flex items-center justify-between"><h2 className="text-2xl font-bold text-slate-800">Usuarios y permisos</h2><button onClick={create} className="primary"><Plus size={18}/> Nuevo usuario</button></div><div className="overflow-hidden rounded-2xl border bg-white"><table className="w-full text-sm"><thead className="bg-slate-50"><tr><th className="px-5 py-3 text-left">Usuario</th><th className="px-5 py-3 text-left">Nombre</th><th className="px-5 py-3">Tipo</th><th className="px-5 py-3">Estado</th><th></th></tr></thead><tbody>{users.map((user)=><tr key={user.id} className="border-t"><td className="px-5 py-4 font-bold">{user.usuario}</td><td className="px-5 py-4">{user.nombre}</td><td className="px-5 py-4 text-center">{user.administrador?"Administrador":"Usuario"}</td><td className="px-5 py-4 text-center">{user.activo?"Activo":"Inactivo"}</td><td className="px-5 py-4 text-right"><button onClick={()=>edit(user)} className="font-semibold text-hospital-700">Editar permisos</button></td></tr>)}{!loading&&!users.length&&<tr><td colSpan="5" className="p-10 text-center text-slate-400">Sin usuarios.</td></tr>}</tbody></table></div></section>;
+  const edit=(user)=>setSelected({...user,password:"",rolIds:data.userRoles.filter((item)=>Number(item.idUsuario)===Number(user.id)).map((item)=>Number(item.idRol)),permisos:data.permissions.filter((p)=>Number(p.idUsuario)===Number(user.id)).map((p)=>({modulo:p.modulo,accion:p.accion}))});
+  const create=()=>setSelected({usuario:"",nombre:"",password:"",activo:true,administrador:false,profesionalId:"",rolIds:[],permisos:[]});
+  const togglePermission=(setter,modulo,accion)=>setter((current)=>{const exists=current.permisos.some((p)=>p.modulo===modulo&&p.accion===accion);return{...current,permisos:exists?current.permisos.filter((p)=>p.modulo!==modulo||p.accion!==accion):[...current.permisos,{modulo,accion}]};});
+  const save=async()=>{if(!selected.usuario.trim()||selected.usuario.includes("@")||(!selected.id&&selected.password.length<8))return onNotice("Ingresá un usuario sin @ y una contraseña de al menos 8 caracteres.");try{await persistUser({...selected,profesionalId:selected.profesionalId?Number(selected.profesionalId):null});setSelected(null);refresh();onNotice("Usuario, profesional y roles guardados correctamente.");}catch(e){onNotice(`No se pudo guardar el usuario: ${e.message}`);}};
+  const editRole=(role)=>setSelectedRole({...role,permisos:data.rolePermissions.filter((p)=>Number(p.idRol)===Number(role.id)).map((p)=>({modulo:p.modulo,accion:p.accion}))});
+  const createRole=()=>setSelectedRole({nombre:"",descripcion:"",activo:true,permisos:[]});
+  const saveSelectedRole=async()=>{if(!selectedRole.nombre.trim())return onNotice("Ingresá el nombre del grupo.");try{await persistRole(selectedRole);setSelectedRole(null);refresh();onNotice("Grupo de usuarios guardado correctamente.");}catch(e){onNotice(`No se pudo guardar el grupo: ${e.message}`);}};
+  const PermissionMatrix=({value,setter})=><div className="overflow-x-auto rounded-2xl border bg-white"><table className="w-full text-sm"><thead className="bg-slate-50"><tr><th className="px-4 py-3 text-left">Módulo</th>{permissionActions.map(([,label])=><th key={label} className="px-3 py-3">{label}</th>)}</tr></thead><tbody>{permissionModules.map(([modulo,label])=><tr key={modulo} className="border-t"><td className="px-4 py-3 font-semibold">{label}</td>{permissionActions.map(([accion])=><td key={accion} className="text-center"><input type="checkbox" checked={value.permisos.some((p)=>p.modulo===modulo&&p.accion===accion)} onChange={()=>togglePermission(setter,modulo,accion)}/></td>)}</tr>)}</tbody></table></div>;
+  if(selectedRole)return <section className="space-y-5"><div className="flex items-center justify-between"><h2 className="text-2xl font-bold">{selectedRole.id?"Modificar grupo":"Nuevo grupo"}</h2><button onClick={()=>setSelectedRole(null)} className="secondary">Volver</button></div><div className="grid gap-4 rounded-2xl border bg-white p-5 sm:grid-cols-2"><Field label="Nombre del grupo"><input value={selectedRole.nombre} onChange={(e)=>setSelectedRole({...selectedRole,nombre:e.target.value})} className="control"/></Field><Field label="Descripción"><input value={selectedRole.descripcion||""} onChange={(e)=>setSelectedRole({...selectedRole,descripcion:e.target.value})} className="control"/></Field><label className="flex items-center gap-2"><input type="checkbox" checked={selectedRole.activo} onChange={(e)=>setSelectedRole({...selectedRole,activo:e.target.checked})}/> Grupo activo</label></div><PermissionMatrix value={selectedRole} setter={setSelectedRole}/><div className="flex justify-end"><button onClick={saveSelectedRole} className="primary">Guardar grupo</button></div></section>;
+  if(selected)return <section className="space-y-5"><div className="flex items-center justify-between"><h2 className="text-2xl font-bold">{selected.id?"Modificar usuario":"Nuevo usuario"}</h2><button onClick={()=>setSelected(null)} className="secondary">Volver</button></div><div className="grid gap-4 rounded-2xl border bg-white p-5 sm:grid-cols-2"><Field label="Nombre de usuario"><input value={selected.usuario} onChange={(e)=>setSelected({...selected,usuario:e.target.value.replace(/\s/g,"")})} className="control"/></Field><Field label="Nombre y apellido"><input value={selected.nombre} onChange={(e)=>setSelected({...selected,nombre:e.target.value})} className="control"/></Field><Field label={selected.id?"Nueva contraseña (opcional)":"Contraseña"}><input type="password" value={selected.password} onChange={(e)=>setSelected({...selected,password:e.target.value})} className="control"/></Field><Field label="Profesional vinculado"><select value={selected.profesionalId||""} onChange={(e)=>setSelected({...selected,profesionalId:e.target.value})} className="control"><option value="">Sin profesional vinculado</option>{data.professionals.map((item)=><option key={item.id} value={item.id}>{item.apellido}, {item.nombre}{item.matricula?` · Mat. ${item.matricula}`:""}</option>)}</select></Field><div className="flex items-center gap-6"><label className="flex gap-2"><input type="checkbox" checked={selected.activo} onChange={(e)=>setSelected({...selected,activo:e.target.checked})}/> Activo</label><label className="flex gap-2"><input type="checkbox" checked={selected.administrador} onChange={(e)=>setSelected({...selected,administrador:e.target.checked})}/> Administrador</label></div></div><div className="rounded-2xl border bg-white p-5"><h3 className="font-bold text-slate-800">Grupos asignados</h3><div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{data.roles.map((role)=><label key={role.id} className="flex gap-3 rounded-xl border p-3"><input type="checkbox" checked={selected.rolIds.includes(Number(role.id))} onChange={()=>setSelected((current)=>({...current,rolIds:current.rolIds.includes(Number(role.id))?current.rolIds.filter((id)=>id!==Number(role.id)):[...current.rolIds,Number(role.id)]}))}/><span><strong className="block">{role.nombre}</strong><small className="text-slate-500">{role.descripcion}</small></span></label>)}</div></div>{selected.administrador&&<div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">El administrador tiene acceso total. Los grupos y permisos quedan guardados si luego cambia a usuario común.</div>}<div><h3 className="mb-3 font-bold text-slate-800">Permisos individuales adicionales</h3><PermissionMatrix value={selected} setter={setSelected}/></div><div className="flex justify-end"><button onClick={save} className="primary">Guardar usuario</button></div></section>;
+  return <section className="space-y-5"><div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-2xl font-bold">Usuarios y permisos</h2><div className="flex gap-3"><button onClick={createRole} className="secondary"><UsersRound size={18}/> Nuevo grupo</button><button onClick={create} className="primary"><Plus size={18}/> Nuevo usuario</button></div></div><div className="grid gap-5 xl:grid-cols-[1fr_340px]"><div className="overflow-x-auto rounded-2xl border bg-white"><table className="w-full min-w-[760px] text-sm"><thead className="bg-slate-50"><tr><th className="px-5 py-3 text-left">Usuario</th><th className="px-5 py-3 text-left">Nombre</th><th className="px-5 py-3 text-left">Profesional</th><th className="px-5 py-3">Grupos</th><th></th></tr></thead><tbody>{data.users.map((user)=>{const professional=data.professionals.find((item)=>Number(item.id)===Number(user.profesionalId));const roleNames=data.userRoles.filter((item)=>Number(item.idUsuario)===Number(user.id)).map((item)=>data.roles.find((role)=>Number(role.id)===Number(item.idRol))?.nombre).filter(Boolean);return <tr key={user.id} className="border-t"><td className="px-5 py-4 font-bold">{user.usuario}</td><td className="px-5 py-4">{user.nombre}</td><td className="px-5 py-4">{professional?`${professional.apellido}, ${professional.nombre}`:"—"}</td><td className="px-5 py-4 text-center">{user.administrador?"Administrador":roleNames.join(", ")||"Sin grupo"}</td><td className="px-5 py-4 text-right"><button onClick={()=>edit(user)} className="font-semibold text-hospital-700">Editar</button></td></tr>})}{!loading&&!data.users.length&&<tr><td colSpan="5" className="p-10 text-center text-slate-400">Sin usuarios.</td></tr>}</tbody></table></div><aside className="rounded-2xl border bg-white p-5"><div className="flex items-center justify-between"><h3 className="font-bold">Grupos</h3><button onClick={createRole} className="text-sm font-semibold text-hospital-700">Agregar</button></div><div className="mt-4 space-y-2">{data.roles.map((role)=><button key={role.id} onClick={()=>editRole(role)} className="w-full rounded-xl border p-3 text-left hover:bg-slate-50"><strong className="block">{role.nombre}</strong><span className="text-xs text-slate-500">{role.descripcion||"Sin descripción"}</span></button>)}</div></aside></div></section>;
 }
 
 function Dashboard({ onLogout, currentUser }) {
@@ -6135,6 +6181,9 @@ function Dashboard({ onLogout, currentUser }) {
     view === "list" ? (
       <PatientList
         patients={patients}
+        canCreate={can("patients", "create")}
+        canEdit={can("patients", "edit")}
+        canDelete={can("patients", "delete")}
         onNew={() => {
           setSelectedPatient(null);
           setView("form");
@@ -6552,6 +6601,15 @@ function Dashboard({ onLogout, currentUser }) {
       setAppointments={setAppointments}
       availability={availability}
       setAvailability={setAvailability}
+      currentUser={currentUser}
+      canEditAppointments={can("appointments", "edit")}
+      onOpenHistory={can("clinical-history") ? (patientCode) => {
+        const patient = patients.find((item) => String(item.codigo) === String(patientCode));
+        if (!patient) { setNotice("No se encontró el paciente del turno."); return; }
+        setSelectedPatient(patient);
+        setModule("clinical-history");
+        setView("list");
+      } : null}
       onNotice={(message) => {
         setNotice(message);
         setTimeout(() => setNotice(""), 4000);

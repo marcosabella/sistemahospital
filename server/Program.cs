@@ -19,14 +19,21 @@ if (Directory.Exists(migrationsPath))
 app.MapPost("/api/auth/login", async (LoginInput input, HospitalDatabase db, CancellationToken ct) =>
 {
     if (string.IsNullOrWhiteSpace(input.Usuario) || input.Usuario.Contains('@') || string.IsNullOrWhiteSpace(input.Password)) return Results.Unauthorized();
-    var rows=await db.QueryAsync("SELECT idUsuario,usuario,nombre,passwordHash,passwordSalt,iteraciones,activo,administrador FROM dbo.SistemaUsuario WHERE usuario=@usuario",ct,new(){["usuario"]=input.Usuario.Trim()});
+    var rows=await db.QueryAsync("SELECT idUsuario,usuario,nombre,passwordHash,passwordSalt,iteraciones,activo,administrador,idProfesional FROM dbo.SistemaUsuario WHERE usuario=@usuario",ct,new(){["usuario"]=input.Usuario.Trim()});
     if(rows.Count==0 || rows[0]["activo"] is not true) return Results.Unauthorized();
     var user=rows[0];
     if(!AuthSecurity.Verify(input.Password,(byte[])user["passwordSalt"]!,(byte[])user["passwordHash"]!,Convert.ToInt32(user["iteraciones"]))) return Results.Unauthorized();
     var token=AuthSecurity.NewToken(); var tokenHash=AuthSecurity.TokenHash(token); var id=Convert.ToInt32(user["idUsuario"]);
     await db.ExecuteAsync("DELETE dbo.SistemaSesion WHERE expira<SYSDATETIME(); INSERT dbo.SistemaSesion(idUsuario,tokenHash,expira) VALUES(@id,@hash,DATEADD(HOUR,12,SYSDATETIME()))",new(){["id"]=id,["hash"]=tokenHash},ct);
-    var permissions=await db.QueryAsync("SELECT modulo,accion FROM dbo.SistemaPermisoUsuario WHERE idUsuario=@id AND permitido=1",ct,new(){["id"]=id});
-    return Results.Ok(new{token,user=new{id,usuario=user["usuario"],nombre=user["nombre"],administrador=user["administrador"],permissions}});
+    var permissions=await db.QueryAsync("""
+        SELECT modulo,accion FROM dbo.SistemaPermisoUsuario WHERE idUsuario=@id AND permitido=1
+        UNION
+        SELECT rp.modulo,rp.accion FROM dbo.SistemaUsuarioRol ur
+        INNER JOIN dbo.SistemaRol r ON r.idRol=ur.idRol AND r.activo=1
+        INNER JOIN dbo.SistemaRolPermiso rp ON rp.idRol=r.idRol AND rp.permitido=1
+        WHERE ur.idUsuario=@id
+        """,ct,new(){["id"]=id});
+    return Results.Ok(new{token,user=new{id,usuario=user["usuario"],nombre=user["nombre"],administrador=user["administrador"],profesionalId=user["idProfesional"],permissions}});
 });
 
 app.MapPost("/api/auth/logout", async (HttpContext context, HospitalDatabase db, CancellationToken ct) =>
@@ -42,7 +49,7 @@ app.Use(async (context,next) =>
     var bearer=context.Request.Headers.Authorization.ToString();
     if(!bearer.StartsWith("Bearer ",StringComparison.OrdinalIgnoreCase)){context.Response.StatusCode=401;return;}
     var session=await database.QueryAsync("""
-        SELECT u.idUsuario,u.usuario,u.nombre,u.administrador FROM dbo.SistemaSesion s INNER JOIN dbo.SistemaUsuario u ON u.idUsuario=s.idUsuario
+        SELECT u.idUsuario,u.usuario,u.nombre,u.administrador,u.idProfesional FROM dbo.SistemaSesion s INNER JOIN dbo.SistemaUsuario u ON u.idUsuario=s.idUsuario
         WHERE s.tokenHash=@hash AND s.expira>SYSDATETIME() AND u.activo=1
         """,context.RequestAborted,new(){["hash"]=AuthSecurity.TokenHash(bearer[7..].Trim())});
     if(session.Count==0){context.Response.StatusCode=401;return;}
@@ -52,7 +59,18 @@ app.Use(async (context,next) =>
         var (module,action)=AuthSecurity.RequiredPermission(context.Request.Path,context.Request.Method);
         if(module is not null)
         {
-            var allowed=await database.ScalarAsync<int>("SELECT COUNT(*) FROM dbo.SistemaPermisoUsuario WHERE idUsuario=@id AND modulo=@modulo AND accion=@accion AND permitido=1",new(){["id"]=user["idUsuario"],["modulo"]=module,["accion"]=action},context.RequestAborted);
+            var fallbackModule=context.Request.Method=="GET" && context.Request.Path.StartsWithSegments("/api/cabos") && context.Request.Path.Value?.Split('/',StringSplitOptions.RemoveEmptyEntries).Length==3
+                ? "clinical-history" : module;
+            var allowed=await database.ScalarAsync<int>("""
+                SELECT COUNT(*) FROM (
+                    SELECT modulo,accion FROM dbo.SistemaPermisoUsuario WHERE idUsuario=@id AND permitido=1
+                    UNION
+                    SELECT rp.modulo,rp.accion FROM dbo.SistemaUsuarioRol ur
+                    INNER JOIN dbo.SistemaRol r ON r.idRol=ur.idRol AND r.activo=1
+                    INNER JOIN dbo.SistemaRolPermiso rp ON rp.idRol=r.idRol AND rp.permitido=1
+                    WHERE ur.idUsuario=@id
+                ) permisos WHERE modulo IN (@modulo,@fallback) AND accion=@accion
+                """,new(){["id"]=user["idUsuario"],["modulo"]=module,["fallback"]=fallbackModule,["accion"]=action},context.RequestAborted);
             if(allowed==0){context.Response.StatusCode=403;return;}
         }
     }
@@ -61,24 +79,28 @@ app.Use(async (context,next) =>
 
 app.MapGet("/api/users", async (HospitalDatabase db,CancellationToken ct) =>
 {
-    var users=await db.QueryAsync("SELECT idUsuario AS id,usuario,nombre,activo,administrador FROM dbo.SistemaUsuario ORDER BY usuario",ct);
+    var users=await db.QueryAsync("SELECT idUsuario AS id,usuario,nombre,activo,administrador,idProfesional AS profesionalId FROM dbo.SistemaUsuario ORDER BY usuario",ct);
     var permissions=await db.QueryAsync("SELECT idUsuario,modulo,accion FROM dbo.SistemaPermisoUsuario WHERE permitido=1",ct);
-    return Results.Ok(new{users,permissions});
+    var roles=await db.QueryAsync("SELECT idRol AS id,nombre,descripcion,activo FROM dbo.SistemaRol ORDER BY nombre",ct);
+    var rolePermissions=await db.QueryAsync("SELECT idRol,modulo,accion FROM dbo.SistemaRolPermiso WHERE permitido=1",ct);
+    var userRoles=await db.QueryAsync("SELECT idUsuario,idRol FROM dbo.SistemaUsuarioRol",ct);
+    var professionals=await db.QueryAsync("SELECT idProfesional AS id,apellido,nombre,CONVERT(nvarchar(30),matricula_profesional) AS matricula FROM dbo.Profesionales ORDER BY apellido,nombre",ct);
+    return Results.Ok(new{users,permissions,roles,rolePermissions,userRoles,professionals});
 });
 app.MapPost("/api/users", async (UserInput input,HospitalDatabase db,CancellationToken ct) =>
 {
     if(string.IsNullOrWhiteSpace(input.Usuario)||input.Usuario.Contains('@')||string.IsNullOrWhiteSpace(input.Password)||input.Password.Length<8) return Results.ValidationProblem(new Dictionary<string,string[]>{{"usuario",["El usuario no puede ser un email y la contraseña debe tener al menos 8 caracteres."]}});
     var salt=AuthSecurity.NewSalt();var hash=AuthSecurity.HashPassword(input.Password,salt,210000);
-    var id=await db.ScalarAsync<int>("INSERT dbo.SistemaUsuario(usuario,nombre,passwordHash,passwordSalt,iteraciones,activo,administrador) OUTPUT INSERTED.idUsuario VALUES(@usuario,@nombre,@hash,@salt,210000,@activo,@admin)",new(){["usuario"]=input.Usuario.Trim(),["nombre"]=input.Nombre,["hash"]=hash,["salt"]=salt,["activo"]=input.Activo,["admin"]=input.Administrador},ct);
-    await SavePermissions(db,id,input.Permisos,ct); return Results.Ok(new{id,usuario=input.Usuario,nombre=input.Nombre,activo=input.Activo,administrador=input.Administrador,permisos=input.Permisos});
+    var id=await db.ScalarAsync<int>("INSERT dbo.SistemaUsuario(usuario,nombre,passwordHash,passwordSalt,iteraciones,activo,administrador,idProfesional) OUTPUT INSERTED.idUsuario VALUES(@usuario,@nombre,@hash,@salt,210000,@activo,@admin,@profesional)",new(){["usuario"]=input.Usuario.Trim(),["nombre"]=input.Nombre,["hash"]=hash,["salt"]=salt,["activo"]=input.Activo,["admin"]=input.Administrador,["profesional"]=input.ProfesionalId},ct);
+    await SavePermissions(db,id,input.Permisos,ct); await SaveUserRoles(db,id,input.RolIds,ct); return Results.Ok(new{id,usuario=input.Usuario,nombre=input.Nombre,activo=input.Activo,administrador=input.Administrador,profesionalId=input.ProfesionalId,rolIds=input.RolIds,permisos=input.Permisos});
 });
 app.MapPut("/api/users/{id:int}", async (int id,UserInput input,HospitalDatabase db,CancellationToken ct) =>
 {
     if(input.Usuario.Contains('@')) return Results.BadRequest();
-    var p=new Dictionary<string,object?>{{"id",id},{"usuario",input.Usuario.Trim()},{"nombre",input.Nombre},{"activo",input.Activo},{"admin",input.Administrador}};
-    if(string.IsNullOrWhiteSpace(input.Password)) await db.ExecuteAsync("UPDATE dbo.SistemaUsuario SET usuario=@usuario,nombre=@nombre,activo=@activo,administrador=@admin WHERE idUsuario=@id",p,ct);
-    else {var salt=AuthSecurity.NewSalt();p["salt"]=salt;p["hash"]=AuthSecurity.HashPassword(input.Password,salt,210000);await db.ExecuteAsync("UPDATE dbo.SistemaUsuario SET usuario=@usuario,nombre=@nombre,activo=@activo,administrador=@admin,passwordSalt=@salt,passwordHash=@hash,iteraciones=210000 WHERE idUsuario=@id",p,ct);}
-    await SavePermissions(db,id,input.Permisos,ct);return Results.Ok(new{id,usuario=input.Usuario,nombre=input.Nombre,activo=input.Activo,administrador=input.Administrador,permisos=input.Permisos});
+    var p=new Dictionary<string,object?>{{"id",id},{"usuario",input.Usuario.Trim()},{"nombre",input.Nombre},{"activo",input.Activo},{"admin",input.Administrador},{"profesional",input.ProfesionalId}};
+    if(string.IsNullOrWhiteSpace(input.Password)) await db.ExecuteAsync("UPDATE dbo.SistemaUsuario SET usuario=@usuario,nombre=@nombre,activo=@activo,administrador=@admin,idProfesional=@profesional WHERE idUsuario=@id",p,ct);
+    else {var salt=AuthSecurity.NewSalt();p["salt"]=salt;p["hash"]=AuthSecurity.HashPassword(input.Password,salt,210000);await db.ExecuteAsync("UPDATE dbo.SistemaUsuario SET usuario=@usuario,nombre=@nombre,activo=@activo,administrador=@admin,idProfesional=@profesional,passwordSalt=@salt,passwordHash=@hash,iteraciones=210000 WHERE idUsuario=@id",p,ct);}
+    await SavePermissions(db,id,input.Permisos,ct);await SaveUserRoles(db,id,input.RolIds,ct);return Results.Ok(new{id,usuario=input.Usuario,nombre=input.Nombre,activo=input.Activo,administrador=input.Administrador,profesionalId=input.ProfesionalId,rolIds=input.RolIds,permisos=input.Permisos});
 });
 app.MapDelete("/api/users/{id:int}", async (int id,HttpContext context,HospitalDatabase db,CancellationToken ct) =>
 {
@@ -91,6 +113,34 @@ static async Task SavePermissions(HospitalDatabase db,int id,PermissionInput[]? 
 {
     await db.ExecuteAsync("DELETE dbo.SistemaPermisoUsuario WHERE idUsuario=@id",new(){["id"]=id},ct);
     foreach(var permission in permissions??[]) await db.ExecuteAsync("INSERT dbo.SistemaPermisoUsuario(idUsuario,modulo,accion,permitido) VALUES(@id,@modulo,@accion,1)",new(){["id"]=id,["modulo"]=permission.Modulo,["accion"]=permission.Accion},ct);
+}
+
+static async Task SaveUserRoles(HospitalDatabase db,int id,int[]? roleIds,CancellationToken ct)
+{
+    await db.ExecuteAsync("DELETE dbo.SistemaUsuarioRol WHERE idUsuario=@id",new(){["id"]=id},ct);
+    foreach(var roleId in roleIds??[]) await db.ExecuteAsync("INSERT dbo.SistemaUsuarioRol(idUsuario,idRol) VALUES(@id,@rol)",new(){["id"]=id,["rol"]=roleId},ct);
+}
+
+app.MapPost("/api/users/roles", async (RoleInput input,HospitalDatabase db,CancellationToken ct) =>
+{
+    if(string.IsNullOrWhiteSpace(input.Nombre)) return Results.BadRequest();
+    var id=await db.ScalarAsync<int>("INSERT dbo.SistemaRol(nombre,descripcion,activo) OUTPUT INSERTED.idRol VALUES(@nombre,@descripcion,@activo)",new(){["nombre"]=input.Nombre.Trim(),["descripcion"]=input.Descripcion,["activo"]=input.Activo},ct);
+    await SaveRolePermissions(db,id,input.Permisos,ct);
+    return Results.Ok(new{id,nombre=input.Nombre,descripcion=input.Descripcion,activo=input.Activo,permisos=input.Permisos});
+});
+
+app.MapPut("/api/users/roles/{id:int}", async (int id,RoleInput input,HospitalDatabase db,CancellationToken ct) =>
+{
+    var affected=await db.ExecuteAsync("UPDATE dbo.SistemaRol SET nombre=@nombre,descripcion=@descripcion,activo=@activo WHERE idRol=@id",new(){["id"]=id,["nombre"]=input.Nombre.Trim(),["descripcion"]=input.Descripcion,["activo"]=input.Activo},ct);
+    if(affected==0) return Results.NotFound();
+    await SaveRolePermissions(db,id,input.Permisos,ct);
+    return Results.Ok(new{id,nombre=input.Nombre,descripcion=input.Descripcion,activo=input.Activo,permisos=input.Permisos});
+});
+
+static async Task SaveRolePermissions(HospitalDatabase db,int id,PermissionInput[]? permissions,CancellationToken ct)
+{
+    await db.ExecuteAsync("DELETE dbo.SistemaRolPermiso WHERE idRol=@id",new(){["id"]=id},ct);
+    foreach(var permission in permissions??[]) await db.ExecuteAsync("INSERT dbo.SistemaRolPermiso(idRol,modulo,accion,permitido) VALUES(@id,@modulo,@accion,1)",new(){["id"]=id,["modulo"]=permission.Modulo,["accion"]=permission.Accion},ct);
 }
 
 app.MapGet("/api/health", async (HospitalDatabase db, CancellationToken cancellationToken) =>
@@ -116,7 +166,14 @@ app.MapGet("/api/bootstrap", async (HttpContext context, HospitalDatabase db, Ca
 {
     var currentUser=(Dictionary<string,object?>)context.Items["user"]!;
     var isAdmin=currentUser["administrador"] is true;
-    var granted=isAdmin?new HashSet<string>():new HashSet<string>((await db.QueryAsync("SELECT DISTINCT modulo FROM dbo.SistemaPermisoUsuario WHERE idUsuario=@id AND accion='view' AND permitido=1",cancellationToken,new(){["id"]=currentUser["idUsuario"]})).Select(row=>Convert.ToString(row["modulo"])!));
+    var granted=isAdmin?new HashSet<string>():new HashSet<string>((await db.QueryAsync("""
+        SELECT modulo FROM dbo.SistemaPermisoUsuario WHERE idUsuario=@id AND accion='view' AND permitido=1
+        UNION
+        SELECT rp.modulo FROM dbo.SistemaUsuarioRol ur
+        INNER JOIN dbo.SistemaRol r ON r.idRol=ur.idRol AND r.activo=1
+        INNER JOIN dbo.SistemaRolPermiso rp ON rp.idRol=r.idRol AND rp.accion='view' AND rp.permitido=1
+        WHERE ur.idUsuario=@id
+        """,cancellationToken,new(){["id"]=currentUser["idUsuario"]})).Select(row=>Convert.ToString(row["modulo"])!));
     bool Has(params string[] modules)=>isAdmin||modules.Any(granted.Contains);
     IReadOnlyList<Dictionary<string,object?>> Empty()=>Array.Empty<Dictionary<string,object?>>();
     var patientsTask = db.QueryAsync("""
@@ -313,13 +370,17 @@ app.MapGet("/api/bootstrap", async (HttpContext context, HospitalDatabase db, Ca
         ORDER BY c.idRegistroCobro, c.idCabo, px.idProfesionalXpractica
         """, cancellationToken);
 
+    var appointmentRestriction = !isAdmin && currentUser["idProfesional"] is not null ? 1 : 0;
+    var linkedProfessionalId = currentUser["idProfesional"] is null ? 0 : Convert.ToInt32(currentUser["idProfesional"]);
     var appointmentsTask = db.QueryAsync("""
         SELECT idTurno AS id, CONVERT(varchar(10), fecha, 23) AS fecha,
                LEFT(CONVERT(varchar(8), hora, 108), 5) AS hora, duracion,
                idProfesional AS profesionalCodigo, idPaciente AS pacienteCodigo,
                motivo, estado, observaciones
-        FROM dbo.Turno ORDER BY fecha, hora
-        """, cancellationToken);
+        FROM dbo.Turno
+        WHERE @restrict=0 OR (@profesional>0 AND idProfesional=@profesional)
+        ORDER BY fecha, hora
+        """, cancellationToken, new() { ["restrict"] = appointmentRestriction, ["profesional"] = linkedProfessionalId });
     var availabilityTask = db.QueryAsync("""
         SELECT idDisponibilidad AS id, idProfesional AS profesionalCodigo, diaSemana,
                LEFT(CONVERT(varchar(8), desde, 108), 5) AS desde,
@@ -813,8 +874,18 @@ app.MapPost("/api/appointments", async (AppointmentInput input, HospitalDatabase
     return Results.Created($"/api/appointments/{id}", input.ToResponse(id));
 });
 
-app.MapPut("/api/appointments/{id:int}", async (int id, AppointmentInput input, HospitalDatabase db, CancellationToken ct) =>
+app.MapPut("/api/appointments/{id:int}", async (int id, AppointmentInput input, HttpContext context, HospitalDatabase db, CancellationToken ct) =>
 {
+    var allowedStates = new[] { "Programado", "Confirmado", "En espera", "En atención", "Atendido", "Ausente", "Cancelado" };
+    if (!allowedStates.Contains(input.Estado)) return Results.ValidationProblem(new Dictionary<string,string[]> { ["estado"] = ["El estado indicado no es válido."] });
+    var current=(Dictionary<string,object?>)context.Items["user"]!;
+    if(current["administrador"] is not true && current["idProfesional"] is not null)
+    {
+        var ownsToday=await db.ScalarAsync<int>("SELECT COUNT(*) FROM dbo.Turno WHERE idTurno=@id AND idProfesional=@profesional AND fecha=CAST(GETDATE() AS date)",new(){["id"]=id,["profesional"]=current["idProfesional"]},ct);
+        if(ownsToday==0) return Results.Problem("Sólo podés modificar tus turnos del día.",statusCode:403);
+        var affectedStatus=await db.ExecuteAsync("UPDATE dbo.Turno SET estado=@estado,observaciones=@observaciones WHERE idTurno=@id",new(){["id"]=id,["estado"]=input.Estado,["observaciones"]=input.Observaciones},ct);
+        return affectedStatus==0?Results.NotFound():Results.Ok(input.ToResponse(id));
+    }
     var parameters = input.Parameters(); parameters["id"] = id;
     if (await db.ScalarAsync<int>(AppointmentInput.CollisionSql, parameters, ct) > 0)
         return Results.Conflict(new { detail = "Ese horario ya está ocupado para el profesional." });
@@ -1312,7 +1383,8 @@ sealed record NomenclatureInput(string Codigo, string Descripcion, decimal Aranc
 sealed record FeeInput(decimal? ArancelAnterior, decimal Arancel);
 sealed record LoginInput(string Usuario,string Password);
 sealed record PermissionInput(string Modulo,string Accion);
-sealed record UserInput(string Usuario,string Nombre,string? Password,bool Activo,bool Administrador,PermissionInput[]? Permisos);
+sealed record UserInput(string Usuario,string Nombre,string? Password,bool Activo,bool Administrador,int? ProfesionalId,int[]? RolIds,PermissionInput[]? Permisos);
+sealed record RoleInput(string Nombre,string? Descripcion,bool Activo,PermissionInput[]? Permisos);
 static class AuthSecurity
 {
     public static byte[] NewSalt(){var bytes=new byte[32];System.Security.Cryptography.RandomNumberGenerator.Fill(bytes);return bytes;}

@@ -11,6 +11,7 @@ export const login = (usuario, password) => fetch('/api/auth/login', { method: '
 export const logout = () => authFetch('/api/auth/logout', { method: 'POST' }).then(response => response.status === 204 ? null : parseResponse(response))
 export const loadUsers = () => authFetch('/api/users').then(parseResponse)
 export const saveUser = item => send(`/api/users${item.id ? `/${item.id}` : ''}`, item.id ? 'PUT' : 'POST', item)
+export const saveRole = item => send(`/api/users/roles${item.id ? `/${item.id}` : ''}`, item.id ? 'PUT' : 'POST', item)
 
 export const loadHospitalData = () => authFetch('/api/bootstrap').then(parseResponse)
 export const loadClinicalHistory = patientId => authFetch(`/api/clinical-records/patients/${patientId}`).then(parseResponse)

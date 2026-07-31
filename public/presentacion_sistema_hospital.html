@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Sistema de Gestión Hospitalaria - Presentación Institucional</title>
+<style>
+  @page { size: A4 landscape; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; font-family: "Segoe UI", Arial, sans-serif; color: #10233f; background: #dfe8ee; }
+  .page { width: 297mm; height: 210mm; page-break-after: always; overflow: hidden; background: #f7fafc; position: relative; padding: 13mm 15mm 11mm; }
+  .page:last-child { page-break-after: auto; }
+  .brand-line { position: absolute; inset: 0 0 auto; height: 5mm; background: linear-gradient(90deg,#07556a,#078b9a,#20b8b1); }
+  .page-number { position: absolute; right: 15mm; bottom: 5.5mm; font-size: 8.5pt; color: #718096; }
+  .confidential { position: absolute; left: 15mm; bottom: 5.5mm; font-size: 8pt; color: #8796a8; }
+  h1, h2, h3, p { margin-top: 0; }
+  h1 { font-size: 32pt; line-height: 1.08; margin-bottom: 6mm; }
+  h2 { font-size: 22pt; margin: 0; }
+  h3 { font-size: 12pt; color: #078391; margin-bottom: 2mm; }
+  .eyebrow { color: #078391; font-size: 10pt; font-weight: 700; text-transform: uppercase; letter-spacing: .16em; }
+  .subtitle { color: #52677f; font-size: 14pt; line-height: 1.5; }
+  .cover { color: white; background: linear-gradient(125deg,#073c50 0%,#075d70 55%,#07949e 100%); padding: 22mm; }
+  .cover::after { content:""; position:absolute; width:150mm; height:150mm; border-radius:50%; right:-35mm; bottom:-55mm; border:24mm solid rgba(255,255,255,.06); }
+  .cover .logo { width: 31mm; height: 31mm; object-fit: contain; background: white; border-radius: 8mm; padding: 3mm; margin-bottom: 17mm; }
+  .cover h1 { max-width: 190mm; font-size: 38pt; }
+  .cover .subtitle { max-width: 180mm; color: #d9f7f7; }
+  .cover-footer { position:absolute; left:22mm; bottom:20mm; font-size:11pt; color:#d9f7f7; }
+  .header { display:flex; justify-content:space-between; align-items:flex-start; gap:10mm; margin: 2mm 0 7mm; }
+  .header p { margin: 2mm 0 0; color:#60758b; font-size:10.5pt; }
+  .module-badge { flex:none; border:1px solid #a9d9dd; background:#eaf8f8; color:#067681; border-radius:20mm; padding:2.3mm 5mm; font-size:9pt; font-weight:700; }
+  .overview-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:5mm; margin-top:9mm; }
+  .card { border:1px solid #d8e2e9; border-radius:5mm; background:white; padding:6mm; min-height:49mm; }
+  .card strong { display:block; font-size:13pt; margin:2mm 0; }
+  .card p { font-size:10pt; line-height:1.45; color:#5b6f85; margin:0; }
+  .card .num { color:#078b98; font-size:21pt; font-weight:800; }
+  .module-layout { display:grid; grid-template-columns: 1fr 76mm; gap:7mm; align-items:start; }
+  .screenshot-wrap { height:132mm; border:1px solid #cbd9e3; background:white; border-radius:4mm; padding:2.5mm; box-shadow:0 2mm 7mm rgba(31,60,80,.10); overflow:hidden; }
+  .screenshot-wrap img { width:100%; height:100%; object-fit:contain; object-position:top center; }
+  .features { height:132mm; border-radius:4mm; background:#083f54; color:white; padding:6mm; }
+  .features h3 { color:#79e0dc; font-size:11pt; }
+  .features ul { padding-left:5mm; margin:3mm 0 0; }
+  .features li { margin-bottom:3.1mm; font-size:9.3pt; line-height:1.35; color:#eefcfc; }
+  .note { margin-top:4mm; padding:3mm 4mm; border-left:1.5mm solid #0a9ca5; background:#eaf7f7; color:#3d596d; font-size:9pt; line-height:1.4; }
+  .closing { background:linear-gradient(135deg,#f8fbfc,#e7f5f5); }
+  .closing-grid { display:grid; grid-template-columns:1.05fr .95fr; gap:12mm; margin-top:10mm; }
+  .closing ul { padding-left:6mm; }
+  .closing li { margin-bottom:4mm; font-size:12pt; color:#435b70; }
+  .highlight { background:#064f63; color:white; border-radius:7mm; padding:10mm; }
+  .highlight h3 { color:#7ee1dc; font-size:15pt; }
+  .highlight p { color:#e5f8f8; font-size:12pt; line-height:1.55; }
+  @media print { html,body { background:white; } }
+</style>
+</head>
+<body>
+  <section class="page cover">
+    <img class="logo" src="cruz%20hospital.png" alt="Identidad hospitalaria">
+    <p class="eyebrow" style="color:#79e0dc">Presentación institucional</p>
+    <h1>Sistema de Gestión Hospitalaria</h1>
+    <p class="subtitle">Plataforma integral para organizar la atención, centralizar la información y mejorar los procesos administrativos y asistenciales del Hospital Municipal Luis Rivero.</p>
+    <div class="cover-footer">Documento de presentación · Julio de 2026</div>
+  </section>
+
+  <section class="page">
+    <div class="brand-line"></div>
+    <div class="header"><div><p class="eyebrow">Visión general</p><h2>Una gestión integrada y trazable</h2><p>La plataforma reúne en un único entorno la operación administrativa, la atención profesional y el seguimiento económico.</p></div></div>
+    <div class="overview-grid">
+      <article class="card"><span class="num">01</span><strong>Atención organizada</strong><p>Agenda de turnos, disponibilidad profesional, estados de atención e ingreso directo a la historia clínica.</p></article>
+      <article class="card"><span class="num">02</span><strong>Información centralizada</strong><p>Pacientes, profesionales, personal, obras sociales, nomenclador, medicamentos y antecedentes clínicos.</p></article>
+      <article class="card"><span class="num">03</span><strong>Trazabilidad asistencial</strong><p>Cabos, prestaciones, diagnósticos, pedidos médicos, laboratorios y evoluciones vinculadas al paciente.</p></article>
+      <article class="card"><span class="num">04</span><strong>Gestión económica</strong><p>Registro de facturación y cobros de obras sociales, débitos y liquidaciones institucionales.</p></article>
+      <article class="card"><span class="num">05</span><strong>Seguridad por roles</strong><p>Usuarios asociados a profesionales, grupos de permisos y acceso diferenciado por módulo y acción.</p></article>
+      <article class="card"><span class="num">06</span><strong>Base para evolucionar</strong><p>Arquitectura modular preparada para incorporar nuevos requerimientos, reportes y circuitos de atención.</p></article>
+    </div>
+    <div class="confidential">Uso institucional</div><div class="page-number">2</div>
+  </section>
+
+  <section class="page"><div class="brand-line"></div><div class="header"><div><p class="eyebrow">Módulo asistencial</p><h2>Turnos y agenda profesional</h2><p>Organiza la demanda diaria y acompaña el circuito desde la llegada del paciente hasta el cierre de la atención.</p></div><span class="module-badge">TURNOS</span></div><div class="module-layout"><div><div class="screenshot-wrap"><img src="capturas/Turnos.png" alt="Módulo Turnos"></div><div class="note">El profesional consulta su agenda completa, pero sólo modifica los estados de sus propios turnos del día.</div></div><aside class="features"><h3>Funcionalidades</h3><ul><li>Agenda diaria y consulta por fecha.</li><li>Alta y modificación de turnos.</li><li>Disponibilidad y horarios profesionales.</li><li>Cambio rápido de estado: confirmado, en espera, en atención, atendido, ausente o cancelado.</li><li>Acceso directo al paciente y su historia clínica.</li><li>Panel filtrado para cada profesional.</li></ul></aside></div><div class="confidential">Uso institucional</div><div class="page-number">3</div></section>
+
+  <section class="page"><div class="brand-line"></div><div class="header"><div><p class="eyebrow">Datos maestros</p><h2>Pacientes</h2><p>Concentra los datos personales, demográficos, de contacto y cobertura necesarios para todos los procesos del sistema.</p></div><span class="module-badge">PACIENTES</span></div><div class="module-layout"><div><div class="screenshot-wrap"><img src="capturas/Pacientes.png" alt="Módulo Pacientes"></div><div class="note">Las acciones visibles se adaptan al permiso del usuario: consultar, crear, modificar, eliminar o acceder a Historia Clínica.</div></div><aside class="features"><h3>Funcionalidades</h3><ul><li>Búsqueda por nombre, DNI o código.</li><li>Alta de nuevas fichas de pacientes.</li><li>Consulta y modificación de datos.</li><li>Domicilio, contacto y obra social.</li><li>Acceso directo a Historia Clínica.</li><li>Control de acciones mediante permisos.</li></ul></aside></div><div class="confidential">Uso institucional</div><div class="page-number">4</div></section>
+
+  <section class="page"><div class="brand-line"></div><div class="header"><div><p class="eyebrow">Seguimiento asistencial</p><h2>Historia Clínica</h2><p>Presenta una visión longitudinal de la atención del paciente y conecta registros clínicos, turnos y Cabos.</p></div><span class="module-badge">HISTORIA CLÍNICA</span></div><div class="module-layout"><div><div class="screenshot-wrap"><img src="capturas/Historia%20Clinica.png" alt="Historia Clínica"></div><div class="note">Los registros quedan asociados al paciente, al profesional y al usuario que realizó la carga.</div></div><aside class="features"><h3>Funcionalidades</h3><ul><li>Pestañas de evoluciones, turnos y Cabos.</li><li>Nueva atención con fecha y profesional.</li><li>Descripción clínica y conducta.</li><li>Pedidos médicos e indicaciones de laboratorio.</li><li>Vinculación opcional con turno y Cabo.</li><li>Consulta del detalle completo del Cabo.</li></ul></aside></div><div class="confidential">Uso institucional</div><div class="page-number">5</div></section>
+
+  <section class="page"><div class="brand-line"></div><div class="header"><div><p class="eyebrow">Registro de atención</p><h2>Cabos</h2><p>Gestiona los comprobantes de atención y vincula beneficiarios, prestaciones, diagnósticos y profesionales intervinientes.</p></div><span class="module-badge">CABOS</span></div><div class="module-layout"><div><div class="screenshot-wrap"><img src="capturas/Cabos.png" alt="Módulo Cabos"></div><div class="note">El detalle de un Cabo también puede consultarse desde Historia Clínica sin otorgar acceso al módulo completo.</div></div><aside class="features"><h3>Funcionalidades</h3><ul><li>Filtros por paciente, DNI, fecha y obra social.</li><li>Alta, consulta, modificación y eliminación.</li><li>Carga de prácticas y profesionales.</li><li>Diagnósticos, medicamentos y laboratorio.</li><li>Tipos de atención e internación.</li><li>Base para rendiciones y liquidaciones.</li></ul></aside></div><div class="confidential">Uso institucional</div><div class="page-number">6</div></section>
+
+  <section class="page"><div class="brand-line"></div><div class="header"><div><p class="eyebrow">Facturación y recupero</p><h2>Cobros de Obra Social</h2><p>Registra la presentación, facturación, cobro y diferencias informadas por las entidades financiadoras.</p></div><span class="module-badge">COBROS</span></div><div class="module-layout"><div><div class="screenshot-wrap"><img src="capturas/Registro%20Cobro%20Obra%20Social.png" alt="Cobros de Obra Social"></div><div class="note">Los cobros alimentan los cálculos de liquidación de profesionales y del personal.</div></div><aside class="features"><h3>Funcionalidades</h3><ul><li>Búsqueda por obra social, factura o estado.</li><li>Alta y modificación de comprobantes.</li><li>Fechas de prestación, presentación y cobro.</li><li>Importes facturados y cobrados.</li><li>Registro de débitos asociados a Cabos.</li><li>Seguimiento del estado de cada factura.</li></ul></aside></div><div class="confidential">Uso institucional</div><div class="page-number">7</div></section>
+
+  <section class="page"><div class="brand-line"></div><div class="header"><div><p class="eyebrow">Equipo asistencial</p><h2>Profesionales</h2><p>Administra la nómina médica y los datos que intervienen en agenda, Cabos, Historia Clínica y liquidaciones.</p></div><span class="module-badge">PROFESIONALES</span></div><div class="module-layout"><div><div class="screenshot-wrap"><img src="capturas/Profesionales.png" alt="Módulo Profesionales"></div><div class="note">Cada usuario profesional puede vincularse con esta ficha para recibir su agenda y sus permisos asistenciales.</div></div><aside class="features"><h3>Funcionalidades</h3><ul><li>Búsqueda por nombre, DNI, matrícula o especialidad.</li><li>Alta, consulta y modificación de profesionales.</li><li>Datos de contacto y domicilio.</li><li>Matrícula y especialidad.</li><li>Porcentaje de autogestión.</li><li>Vinculación con usuarios y agenda.</li></ul></aside></div><div class="confidential">Uso institucional</div><div class="page-number">8</div></section>
+
+  <section class="page"><div class="brand-line"></div><div class="header"><div><p class="eyebrow">Recursos humanos</p><h2>Personal</h2><p>Mantiene la nómina institucional utilizada en los procesos administrativos y de distribución de liquidaciones.</p></div><span class="module-badge">PERSONAL</span></div><div class="module-layout"><div><div class="screenshot-wrap"><img src="capturas/Personal.png" alt="Módulo Personal"></div><div class="note">El DNI se presenta como dato operativo; los identificadores técnicos permanecen ocultos para simplificar el uso.</div></div><aside class="features"><h3>Funcionalidades</h3><ul><li>Búsqueda por nombre, DNI o área.</li><li>Alta, consulta, modificación y baja.</li><li>Datos personales y de contacto.</li><li>Domicilio y área de trabajo.</li><li>Nómina para liquidación del personal.</li><li>Acceso controlado por permisos.</li></ul></aside></div><div class="confidential">Uso institucional</div><div class="page-number">9</div></section>
+
+  <section class="page"><div class="brand-line"></div><div class="header"><div><p class="eyebrow">Entidades financiadoras</p><h2>Obras Sociales</h2><p>Centraliza la identificación y los datos institucionales de las coberturas utilizadas por pacientes, Cabos y facturación.</p></div><span class="module-badge">OBRAS SOCIALES</span></div><div class="module-layout"><div><div class="screenshot-wrap"><img src="capturas/Obras%20Sociales.png" alt="Módulo Obras Sociales"></div><div class="note">Una codificación uniforme evita duplicados y mejora la consistencia de cobros y liquidaciones.</div></div><aside class="features"><h3>Funcionalidades</h3><ul><li>Búsqueda por código, sigla o denominación.</li><li>Alta y modificación de entidades.</li><li>Datos institucionales y domicilio.</li><li>Vinculación con pacientes y Cabos.</li><li>Selección en cobros y liquidaciones.</li><li>Catálogo central para toda la aplicación.</li></ul></aside></div><div class="confidential">Uso institucional</div><div class="page-number">10</div></section>
+
+  <section class="page"><div class="brand-line"></div><div class="header"><div><p class="eyebrow">Catálogo prestacional</p><h2>Nomenclador</h2><p>Organiza códigos, descripciones y aranceles utilizados para registrar y valorizar las prestaciones hospitalarias.</p></div><span class="module-badge">NOMENCLADOR</span></div><div class="module-layout"><div><div class="screenshot-wrap"><img src="capturas/Nomenclador.png" alt="Módulo Nomenclador"></div><div class="note">Los valores configurados impactan en Cabos, reportes, rendiciones y liquidaciones.</div></div><aside class="features"><h3>Funcionalidades</h3><ul><li>Búsqueda por código o descripción.</li><li>Consulta de prácticas y valores.</li><li>Alta de nuevos códigos.</li><li>Actualización controlada de aranceles.</li><li>Catálogo de laboratorio.</li><li>Integración con el registro de Cabos.</li></ul></aside></div><div class="confidential">Uso institucional</div><div class="page-number">11</div></section>
+
+  <section class="page"><div class="brand-line"></div><div class="header"><div><p class="eyebrow">Catálogo farmacológico</p><h2>Medicamentos</h2><p>Mantiene los productos utilizados en el registro de las atenciones y sus cantidades asociadas.</p></div><span class="module-badge">MEDICAMENTOS</span></div><div class="module-layout"><div><div class="screenshot-wrap"><img src="capturas/Medicamentos.png" alt="Módulo Medicamentos"></div><div class="note">El catálogo facilita una carga uniforme y evita diferencias de denominación durante la atención.</div></div><aside class="features"><h3>Funcionalidades</h3><ul><li>Búsqueda por producto o presentación.</li><li>Alta de medicamentos.</li><li>Modificación de descripción y precio.</li><li>Consulta y eliminación controlada.</li><li>Presentación comercial.</li><li>Uso directo dentro de los Cabos.</li></ul></aside></div><div class="confidential">Uso institucional</div><div class="page-number">12</div></section>
+
+  <section class="page"><div class="brand-line"></div><div class="header"><div><p class="eyebrow">Facturación institucional</p><h2>Liquidación de Obras Sociales</h2><p>Permite seleccionar, valorizar y presentar las prestaciones realizadas a beneficiarios de cada cobertura.</p></div><span class="module-badge">LIQUIDACIÓN</span></div><div class="module-layout"><div><div class="screenshot-wrap"><img src="capturas/Liquidacion%20Obra%20Sociales.png" alt="Liquidación de Obras Sociales"></div><div class="note">Cuando se incluye el reporte de factura, el sistema solicita el número de factura para completar el documento.</div></div><aside class="features"><h3>Funcionalidades</h3><ul><li>Filtro por obra social y período de prestación.</li><li>Selección del tipo de atención a liquidar.</li><li>Consulta de Cabos incluidos y totales valorizados.</li><li>Reportes ambulatorios, internación, imágenes, laboratorio y hospitalización.</li><li>Ingreso manual del número de factura.</li><li>Impresión de los reportes y la factura seleccionados.</li></ul></aside></div><div class="confidential">Uso institucional</div><div class="page-number">13</div></section>
+
+  <section class="page"><div class="brand-line"></div><div class="header"><div><p class="eyebrow">Distribución profesional</p><h2>Liquidación de Profesionales</h2><p>Calcula los importes correspondientes a cada profesional a partir de la producción y los cobros registrados.</p></div><span class="module-badge">LIQUIDACIÓN</span></div><div class="module-layout"><div><div class="screenshot-wrap"><img src="capturas/Liquidacion%20Profesionales.png" alt="Liquidación de Profesionales"></div><div class="note">La liquidación puede analizarse en forma general, por práctica o agrupada por obra social.</div></div><aside class="features"><h3>Funcionalidades</h3><ul><li>Selección del período de liquidación.</li><li>Cálculo del importe producido.</li><li>Aplicación del descuento institucional del 18%.</li><li>Determinación del neto, porcentaje y total a cobrar.</li><li>Detalle por práctica y por obra social.</li><li>Impresión general y reporte agrupado por cobertura.</li></ul></aside></div><div class="confidential">Uso institucional</div><div class="page-number">14</div></section>
+
+  <section class="page"><div class="brand-line"></div><div class="header"><div><p class="eyebrow">Distribución administrativa</p><h2>Liquidación de Personal</h2><p>Determina el fondo destinado al personal y distribuye el importe entre los integrantes de la nómina institucional.</p></div><span class="module-badge">LIQUIDACIÓN</span></div><div class="module-layout"><div><div class="screenshot-wrap"><img src="capturas/Liquidacion%20Personal.png" alt="Liquidación de Personal"></div><div class="note">La impresión se genera mediante el diálogo del navegador, lista para guardar como PDF o enviar a la impresora.</div></div><aside class="features"><h3>Funcionalidades</h3><ul><li>Selección del período a procesar.</li><li>Cálculo sobre los cobros de obras sociales.</li><li>Visualización del bruto y descuento del 18%.</li><li>Determinación del neto institucional del 82%.</li><li>Cálculo del fondo del 10% para el personal.</li><li>Distribución uniforme e impresión de la liquidación.</li></ul></aside></div><div class="confidential">Uso institucional</div><div class="page-number">15</div></section>
+
+  <section class="page closing"><div class="brand-line"></div><div class="header"><div><p class="eyebrow">Impacto institucional</p><h2>Beneficios esperados</h2></div></div><div class="closing-grid"><div><ul><li>Información disponible en un único sistema y con criterios uniformes.</li><li>Mayor trazabilidad de la atención brindada a cada paciente.</li><li>Reducción de tareas manuales y duplicación de registros.</li><li>Mejor coordinación entre administración y profesionales.</li><li>Seguimiento de facturación, cobros y liquidaciones.</li><li>Acceso seguro según usuario, profesional, grupo y responsabilidad.</li><li>Base escalable para nuevas funcionalidades y reportes.</li></ul></div><div class="highlight"><h3>Una plataforma para acompañar la gestión</h3><p>El sistema integra los procesos centrales del hospital y permite evolucionar gradualmente, incorporando nuevos circuitos asistenciales y administrativos de acuerdo con las necesidades institucionales.</p><p><strong>Hospital Municipal Luis Rivero</strong></p></div></div><div class="confidential">Uso institucional</div><div class="page-number">16</div></section>
+</body>
+</html>
