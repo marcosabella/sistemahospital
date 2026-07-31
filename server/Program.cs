@@ -909,6 +909,47 @@ app.MapDelete("/api/availability/{id:int}", async (int id, HospitalDatabase db, 
     await db.ExecuteAsync("DELETE dbo.DisponibilidadProfesional WHERE idDisponibilidad=@id", new() { ["id"] = id }, ct) == 0
         ? Results.NotFound() : Results.NoContent());
 
+app.MapGet("/api/cabos", async (int? beforeId, int? limit, string? patient, DateOnly? dateFrom, DateOnly? dateTo, string? healthInsurance, HospitalDatabase db, CancellationToken ct) =>
+{
+    var pageSize = Math.Clamp(limit ?? 500, 1, 500);
+    var patientFilter = patient?.Trim() ?? "";
+    var insuranceFilter = healthInsurance?.Trim() ?? "";
+    var rows = await db.QueryAsync("""
+        SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
+        SELECT TOP (@take) c.idCabo AS id, CONVERT(nvarchar(20), c.idCabo) AS numero,
+               CONVERT(varchar(10), c.fechaCabo, 23) AS fecha,
+               c.codigoCabo AS codigoRefes, c.idPaciente AS pacienteCodigo,
+               CONVERT(nvarchar(20), p.dni) AS dni,
+               LTRIM(RTRIM(CONCAT(p.apellido, N', ', p.nombre))) AS nombre,
+               CASE WHEN p.fecha_nacimiento IS NULL THEN NULL ELSE
+                   DATEDIFF(YEAR, p.fecha_nacimiento, CAST(GETDATE() AS date)) -
+                   CASE WHEN DATEADD(YEAR, DATEDIFF(YEAR, p.fecha_nacimiento, CAST(GETDATE() AS date)), p.fecha_nacimiento) > CAST(GETDATE() AS date) THEN 1 ELSE 0 END
+               END AS edad,
+               CASE p.sexo WHEN 1 THEN N'Masculino' WHEN 2 THEN N'Femenino' ELSE N'' END AS sexo,
+               CASE p.idTipoBeneficiario WHEN 1 THEN N'Titular' WHEN 2 THEN N'Familiar' WHEN 3 THEN N'Adherente' WHEN 4 THEN N'Otro' ELSE N'' END AS beneficiario,
+               CASE p.idParentesco WHEN 1 THEN N'Cónyuge' WHEN 2 THEN N'Hijo/a' WHEN 3 THEN N'Otro' ELSE N'' END AS parentesco,
+               os.descripcion AS obraSocial, CONVERT(nvarchar(50), os.codigo) AS rnos,
+               CASE c.idTipoAtencion WHEN 1 THEN N'Consulta' WHEN 2 THEN N'Práctica' WHEN 3 THEN N'Imagen' WHEN 4 THEN N'Internación' ELSE N'Consulta' END AS tipoAtencion,
+               CONVERT(varchar(10), c.fechaAltaInternacion, 23) AS fechaAlta
+        FROM dbo.Cabo c
+        LEFT JOIN dbo.Paciente p ON p.idPaciente = c.idPaciente
+        LEFT JOIN dbo.ObraSocial os ON os.Id = c.idObraSocial
+        WHERE (@beforeId IS NULL OR c.idCabo < @beforeId)
+          AND (@patient = N'' OR CONVERT(nvarchar(20), p.dni) LIKE N'%' + @patient + N'%'
+               OR CONCAT(p.nombre, N' ', p.apellido, N' ', p.apellido, N', ', p.nombre) LIKE N'%' + @patient + N'%')
+          AND (@dateFrom IS NULL OR c.fechaCabo >= @dateFrom)
+          AND (@dateTo IS NULL OR c.fechaCabo <= @dateTo)
+          AND (@healthInsurance = N'' OR os.descripcion = @healthInsurance)
+        ORDER BY c.idCabo DESC
+        """, ct, new() {
+            ["take"] = pageSize + 1, ["beforeId"] = beforeId,
+            ["patient"] = patientFilter, ["dateFrom"] = dateFrom,
+            ["dateTo"] = dateTo, ["healthInsurance"] = insuranceFilter
+        });
+    var hasMore = rows.Count > pageSize;
+    return Results.Ok(new { items = rows.Take(pageSize), hasMore });
+});
+
 app.MapGet("/api/cabos/{id:int}", async (int id, HospitalDatabase db, CancellationToken ct) =>
 {
     var exists = await db.ScalarAsync<int>("SELECT COUNT(*) FROM dbo.Cabo WHERE idCabo=@id", new() { ["id"] = id }, ct);

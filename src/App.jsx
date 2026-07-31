@@ -15,6 +15,7 @@ import {
   deleteCabo as removeCabo,
   deleteHealthInsurancePayment as removeHealthInsurancePayment,
   loadCaboDetails,
+  loadCabosPage,
   loadCabosForDebit,
   loadHospitalData,
   loadClinicalHistory,
@@ -3561,17 +3562,40 @@ function CaboForm({
   );
 }
 
-function CaboList({ cabos, onNew, onView, onEdit, onDelete }) {
+function CaboList({ cabos, onNew, onView, onEdit, onDelete, onLoadOlder, loadingOlder, hasMoreCabos }) {
   const [patient, setPatient] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [healthInsurance, setHealthInsurance] = useState("");
+  const [remoteResults, setRemoteResults] = useState([]);
+  const [searching, setSearching] = useState(false);
   const insuranceOptions = useMemo(
     () => [...new Set(cabos.map((item) => item.obraSocial).filter(Boolean))].sort((a, b) => a.localeCompare(b, "es")),
     [cabos],
   );
+  const hasFilters = Boolean(patient || dateFrom || dateTo || healthInsurance);
+  useEffect(() => {
+    if (!hasFilters) {
+      setRemoteResults([]);
+      setSearching(false);
+      return;
+    }
+    let active = true;
+    const timer = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const result = await loadCabosPage(null, 500, { patient: patient.trim(), dateFrom, dateTo, healthInsurance });
+        if (active) setRemoteResults(result.items || []);
+      } catch {
+        if (active) setRemoteResults([]);
+      } finally {
+        if (active) setSearching(false);
+      }
+    }, 300);
+    return () => { active = false; clearTimeout(timer); };
+  }, [patient, dateFrom, dateTo, healthInsurance, hasFilters]);
   const normalizedPatient = patient.trim().toLocaleLowerCase("es");
-  const filtered = cabos.filter((item) => {
+  const filtered = (hasFilters ? remoteResults : cabos).filter((item) => {
     const matchesPatient = !normalizedPatient || `${item.nombre} ${item.dni}`.toLocaleLowerCase("es").includes(normalizedPatient);
     const matchesFrom = !dateFrom || (item.fecha && item.fecha >= dateFrom);
     const matchesTo = !dateTo || (item.fecha && item.fecha <= dateTo);
@@ -3579,7 +3603,6 @@ function CaboList({ cabos, onNew, onView, onEdit, onDelete }) {
     return matchesPatient && matchesFrom && matchesTo && matchesInsurance;
   });
   const pagination = usePagination(filtered, [patient, dateFrom, dateTo, healthInsurance]);
-  const hasFilters = patient || dateFrom || dateTo || healthInsurance;
   const clearFilters = () => { setPatient(""); setDateFrom(""); setDateTo(""); setHealthInsurance(""); };
   return (
     <>
@@ -3614,7 +3637,9 @@ function CaboList({ cabos, onNew, onView, onEdit, onDelete }) {
           <Field label="Obra social"><select value={healthInsurance} onChange={(e) => setHealthInsurance(e.target.value)} className="control"><option value="">Todas</option>{insuranceOptions.map((item) => <option key={item} value={item}>{item}</option>)}</select></Field>
           {hasFilters && <button type="button" onClick={clearFilters} className="secondary md:col-span-2 xl:col-span-5 xl:justify-self-end"><X size={16} /> Limpiar filtros</button>}
         </div>
-        {filtered.length ? (
+        {searching ? (
+          <div className="grid min-h-[240px] place-items-center text-sm font-semibold text-slate-400">Buscando Cabos en la base de datos...</div>
+        ) : filtered.length ? (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
@@ -3700,6 +3725,14 @@ function CaboList({ cabos, onNew, onView, onEdit, onDelete }) {
           </div>
         )}
         <Pagination {...pagination} total={filtered.length} onChange={pagination.setPage} />
+        {!hasFilters && hasMoreCabos && (
+          <div className="flex justify-center border-t border-slate-100 p-4">
+            <button type="button" onClick={onLoadOlder} disabled={loadingOlder} className="secondary disabled:cursor-wait disabled:opacity-60">
+              {loadingOlder ? "Cargando registros anteriores..." : "Cargar 500 Cabos anteriores"}
+            </button>
+          </div>
+        )}
+        {!hasFilters && !hasMoreCabos && cabos.length >= 500 && <p className="border-t border-slate-100 p-4 text-center text-sm text-slate-400">Se cargaron todos los Cabos registrados.</p>}
       </section>
     </>
   );
@@ -5971,6 +6004,8 @@ function Dashboard({ onLogout, currentUser }) {
     [cieCodes, setCieCodes] = useState([]),
     [laboratoryCodes, setLaboratoryCodes] = useState([]),
     [cabos, setCabos] = useState([]),
+    [hasMoreCabos, setHasMoreCabos] = useState(false),
+    [loadingOlderCabos, setLoadingOlderCabos] = useState(false),
     [cobrosOS, setCobrosOS] = useState([]),
     [selectedPatient, setSelectedPatient] = useState(null),
     [selectedProfessional, setSelectedProfessional] = useState(null),
@@ -6002,8 +6037,9 @@ function Dashboard({ onLogout, currentUser }) {
         setSpecialties(data.specialties.map((item) => item.descripcion));
         setAreas(data.areas.map((item) => item.descripcion));
         setLocations(data.locations || []);
+        const initialCabos = data.cabos || [];
         setCabos(
-          (data.cabos || []).map((item) => ({
+          initialCabos.map((item) => ({
             ...item,
             edad: item.edad ?? "",
             prestaciones: [],
@@ -6012,6 +6048,7 @@ function Dashboard({ onLogout, currentUser }) {
             laboratorio: [],
           })),
         );
+        setHasMoreCabos(initialCabos.length >= 500);
         const debitsByCobro = (data.cobroDebits || []).reduce((groups, debit) => {
           const key = String(debit.cobroId);
           (groups[key] ||= []).push({ ...debit, key: `DEBIT-${debit.id}` });
@@ -6553,6 +6590,34 @@ function Dashboard({ onLogout, currentUser }) {
       setTimeout(() => setNotice(""), 5000);
     }
   };
+  const loadOlderCabos = async () => {
+    if (loadingOlderCabos || !hasMoreCabos || !cabos.length) return;
+    setLoadingOlderCabos(true);
+    try {
+      const oldestId = Math.min(...cabos.map((item) => Number(item.id)).filter(Number.isFinite));
+      const result = await loadCabosPage(oldestId, 500);
+      const older = (result.items || []).map((item) => ({
+        ...item,
+        edad: item.edad ?? "",
+        prestaciones: [],
+        diagnosticos: [],
+        medicamentos: [],
+        laboratorio: [],
+      }));
+      setCabos((current) => {
+        const existing = new Set(current.map((item) => String(item.id)));
+        return [...current, ...older.filter((item) => !existing.has(String(item.id)))];
+      });
+      setHasMoreCabos(Boolean(result.hasMore));
+      setNotice(`${older.length} Cabos anteriores cargados.`);
+      setTimeout(() => setNotice(""), 4000);
+    } catch (error) {
+      setNotice(`No se pudieron cargar los Cabos anteriores: ${error.message}`);
+      setTimeout(() => setNotice(""), 5000);
+    } finally {
+      setLoadingOlderCabos(false);
+    }
+  };
   const caboContent =
     view === "list" ? (
       <CaboList
@@ -6564,6 +6629,9 @@ function Dashboard({ onLogout, currentUser }) {
         onView={(item) => openCabo(item, "detail")}
         onEdit={(item) => openCabo(item, "form")}
         onDelete={deleteCabo}
+        onLoadOlder={loadOlderCabos}
+        loadingOlder={loadingOlderCabos}
+        hasMoreCabos={hasMoreCabos}
       />
     ) : (
       <CaboForm

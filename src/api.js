@@ -62,6 +62,15 @@ export const loadPersonnelLiquidationDetail = (from, to) => {
   return authFetch(`/api/liquidations/personnel/detail?${params}`).then(parseResponse)
 }
 export const loadCaboDetails = id => authFetch(`/api/cabos/${id}`).then(parseResponse)
+export const loadCabosPage = (beforeId, limit = 500, filters = {}) => {
+  const params = new URLSearchParams({ limit })
+  if (beforeId) params.set('beforeId', beforeId)
+  if (filters.patient) params.set('patient', filters.patient)
+  if (filters.dateFrom) params.set('dateFrom', filters.dateFrom)
+  if (filters.dateTo) params.set('dateTo', filters.dateTo)
+  if (filters.healthInsurance) params.set('healthInsurance', filters.healthInsurance)
+  return authFetch(`/api/cabos?${params}`).then(parseResponse)
+}
 export const loadCabosForDebit = (cobroId, fechaPrestacion, obraSocialId, caboId = 0) => {
   const params = new URLSearchParams({ caboId })
   if (fechaPrestacion) params.set('fechaPrestacion', fechaPrestacion)
