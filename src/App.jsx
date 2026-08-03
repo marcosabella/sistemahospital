@@ -117,6 +117,7 @@ const emptyProfessional = {
   especialidad: "",
   calle: "",
   numero: "",
+  idLocalidad: "",
   localidad: "",
   codigoPostal: "",
   partido: "",
@@ -133,6 +134,7 @@ const emptyPersonnel = {
   area: "",
   calle: "",
   numero: "",
+  idLocalidad: "",
   localidad: "",
   codigoPostal: "",
   partido: "",
@@ -502,6 +504,53 @@ function Landing({ onAdminAccess }) {
   );
 }
 
+function DatabaseLoadingModal({ error, onRetry, autoRetry = false }) {
+  return (
+    <div
+      className="fixed inset-0 z-[100] grid place-items-center bg-slate-950/55 p-4 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="database-loading-title"
+      aria-live="polite"
+    >
+      <div className="w-full max-w-md rounded-3xl border border-white/70 bg-white p-7 text-center shadow-2xl sm:p-9">
+        {error ? (
+          <div className="mx-auto grid size-16 place-items-center rounded-2xl bg-red-50 text-red-600">
+            <X size={32} />
+          </div>
+        ) : (
+          <div className="relative mx-auto grid size-20 place-items-center">
+            <div className="absolute inset-0 animate-spin rounded-full border-4 border-hospital-100 border-t-hospital-600" />
+            <Building2 className="text-hospital-700" size={30} />
+          </div>
+        )}
+        <h2 id="database-loading-title" className="mt-5 text-xl font-bold text-slate-800">
+          {error ? "No pudimos cargar los datos" : "Accediendo a la base de datos"}
+        </h2>
+        <p className="mt-3 leading-6 text-slate-500">
+          {error || "Estamos preparando la información del sistema. Este proceso puede demorar unos segundos."}
+        </p>
+        {error && autoRetry && (
+          <p className="mt-3 text-sm font-semibold text-hospital-700">
+            El sistema volverá a intentarlo automáticamente en unos segundos.
+          </p>
+        )}
+        {!error && (
+          <div className="mt-6 flex items-center justify-center gap-2 text-sm font-semibold text-hospital-700">
+            <span className="size-2 animate-pulse rounded-full bg-hospital-500" />
+            Por favor, esperá y no cierres esta ventana
+          </div>
+        )}
+        {error && onRetry && (
+          <button type="button" onClick={onRetry} className="primary mt-6 w-full">
+            Reintentar conexión
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function Login({ onLogin }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -518,6 +567,7 @@ function Login({ onLogin }) {
   };
   return (
     <main className="login-screen grid min-h-screen lg:grid-cols-[1.05fr_.95fr]">
+      {loading && <DatabaseLoadingModal />}
       <section className="relative hidden overflow-hidden login-pattern p-14 text-white lg:flex lg:flex-col lg:justify-between">
         <Brand />
         <div className="relative z-10 max-w-xl">
@@ -577,7 +627,9 @@ function Login({ onLogin }) {
                 {error}
               </p>
             )}
-            <button className="primary w-full">Ingresar al sistema</button>
+            <button disabled={loading} className="primary w-full disabled:cursor-wait disabled:opacity-70">
+              {loading ? "Conectando..." : "Ingresar al sistema"}
+            </button>
           </form>
         </div>
       </section>
@@ -1198,7 +1250,7 @@ function PatientForm({
                 </button>
               </div>
             </Field>
-            <Field label="Partido">
+            <Field label="Departamento">
               <input
                 value={data.partido}
                 readOnly
@@ -1436,6 +1488,7 @@ function ProfessionalForm({
   initial = emptyProfessional,
   readOnly = false,
   specialties,
+  locations,
   onAddSpecialty,
   onCancel,
   onSaved,
@@ -1446,7 +1499,20 @@ function ProfessionalForm({
   const [specialtyModalOpen, setSpecialtyModalOpen] = useState(false);
   const [newSpecialty, setNewSpecialty] = useState("");
   const [specialtyError, setSpecialtyError] = useState("");
+  const [locationSearchOpen, setLocationSearchOpen] = useState(false);
+  const [locationQuery, setLocationQuery] = useState("");
   const set = (key) => (e) => setData({ ...data, [key]: e.target.value });
+  const selectLocation = (location) => {
+    setData((current) => ({
+      ...current,
+      idLocalidad: location.id,
+      localidad: location.nombre,
+      partido: location.departamento,
+      provincia: location.provincia,
+    }));
+    setLocationSearchOpen(false);
+    setLocationQuery("");
+  };
   const save = (e) => {
     e.preventDefault();
     if (readOnly) return onCancel();
@@ -1617,15 +1683,37 @@ function ProfessionalForm({
                 {input("codigoPostal", "B1704", { uppercase: true })}
               </Field>
               <Field label="Localidad" className="lg:col-span-2">
-                {input("localidad", "Localidad", { uppercase: true })}
+                <div className="flex gap-2">
+                  <input
+                    value={data.localidad}
+                    readOnly
+                    placeholder="Seleccionar localidad"
+                    className="control bg-slate-50 uppercase"
+                  />
+                  {!readOnly && (
+                    <button
+                      type="button"
+                      onClick={() => setLocationSearchOpen(true)}
+                      className="icon-button"
+                      title="Buscar localidad"
+                      aria-label="Buscar localidad"
+                    >
+                      <Search size={19} />
+                    </button>
+                  )}
+                </div>
               </Field>
-              <Field label="Departamento / partido">
-                {input("partido", "Departamento o partido", {
+              <Field label="Departamento">
+                {input("partido", "Se completa automáticamente", {
                   uppercase: true,
+                  disabled: true,
                 })}
               </Field>
               <Field label="Provincia">
-                {input("provincia", "Provincia", { uppercase: true })}
+                {input("provincia", "Se completa automáticamente", {
+                  uppercase: true,
+                  disabled: true,
+                })}
               </Field>
             </Section>
           )}
@@ -1658,6 +1746,18 @@ function ProfessionalForm({
           onConfirm={addSpecialty}
         />
       )}
+      {locationSearchOpen && (
+        <LocationSearchModal
+          items={locations}
+          query={locationQuery}
+          onQueryChange={setLocationQuery}
+          onSelect={selectLocation}
+          onCancel={() => {
+            setLocationSearchOpen(false);
+            setLocationQuery("");
+          }}
+        />
+      )}
     </>
   );
 }
@@ -1666,6 +1766,7 @@ function PersonnelForm({
   initial = emptyPersonnel,
   readOnly = false,
   areas,
+  locations,
   onAddArea,
   onCancel,
   onSaved,
@@ -1676,7 +1777,20 @@ function PersonnelForm({
   const [areaModalOpen, setAreaModalOpen] = useState(false);
   const [newArea, setNewArea] = useState("");
   const [areaError, setAreaError] = useState("");
+  const [locationSearchOpen, setLocationSearchOpen] = useState(false);
+  const [locationQuery, setLocationQuery] = useState("");
   const set = (key) => (e) => setData({ ...data, [key]: e.target.value });
+  const selectLocation = (location) => {
+    setData((current) => ({
+      ...current,
+      idLocalidad: location.id,
+      localidad: location.nombre,
+      partido: location.departamento,
+      provincia: location.provincia,
+    }));
+    setLocationSearchOpen(false);
+    setLocationQuery("");
+  };
   const save = (e) => {
     e.preventDefault();
     if (readOnly) return onCancel();
@@ -1811,15 +1925,37 @@ function PersonnelForm({
                 {input("codigoPostal", "B1704", { uppercase: true })}
               </Field>
               <Field label="Localidad" className="lg:col-span-2">
-                {input("localidad", "Localidad", { uppercase: true })}
+                <div className="flex gap-2">
+                  <input
+                    value={data.localidad}
+                    readOnly
+                    placeholder="Seleccionar localidad"
+                    className="control bg-slate-50 uppercase"
+                  />
+                  {!readOnly && (
+                    <button
+                      type="button"
+                      onClick={() => setLocationSearchOpen(true)}
+                      className="icon-button"
+                      title="Buscar localidad"
+                      aria-label="Buscar localidad"
+                    >
+                      <Search size={19} />
+                    </button>
+                  )}
+                </div>
               </Field>
-              <Field label="Departamento / partido">
-                {input("partido", "Departamento o partido", {
+              <Field label="Departamento">
+                {input("partido", "Se completa automáticamente", {
                   uppercase: true,
+                  disabled: true,
                 })}
               </Field>
               <Field label="Provincia">
-                {input("provincia", "Provincia", { uppercase: true })}
+                {input("provincia", "Se completa automáticamente", {
+                  uppercase: true,
+                  disabled: true,
+                })}
               </Field>
             </Section>
           )}
@@ -1850,6 +1986,18 @@ function PersonnelForm({
             setAreaError("");
           }}
           onConfirm={addArea}
+        />
+      )}
+      {locationSearchOpen && (
+        <LocationSearchModal
+          items={locations}
+          query={locationQuery}
+          onQueryChange={setLocationQuery}
+          onSelect={selectLocation}
+          onCancel={() => {
+            setLocationSearchOpen(false);
+            setLocationQuery("");
+          }}
         />
       )}
     </>
@@ -6015,6 +6163,9 @@ function Dashboard({ onLogout, currentUser }) {
     [selectedCabo, setSelectedCabo] = useState(null),
     [selectedCobroOS, setSelectedCobroOS] = useState(null),
     [helpOpen, setHelpOpen] = useState(false),
+    [initialLoading, setInitialLoading] = useState(true),
+    [initialLoadError, setInitialLoadError] = useState(""),
+    [initialLoadAttempt, setInitialLoadAttempt] = useState(0),
     [notice, setNotice] = useState("");
   const [specialties, setSpecialties] = useState(defaultSpecialties),
     [areas, setAreas] = useState(defaultAreas),
@@ -6023,6 +6174,9 @@ function Dashboard({ onLogout, currentUser }) {
     [availability, setAvailability] = useState([]);
   useEffect(() => {
     let active = true;
+    let retryTimer;
+    setInitialLoading(true);
+    setInitialLoadError("");
     loadHospitalData()
       .then((data) => {
         if (!active) return;
@@ -6060,15 +6214,22 @@ function Dashboard({ onLogout, currentUser }) {
         })));
         setAppointments((data.appointments || []).map(normalizeAppointment));
         setAvailability((data.availability || []).map(normalizeAvailability));
+        setInitialLoading(false);
       })
       .catch((error) => {
         if (!active) return;
-        setNotice(`No se pudo conectar con la base de datos: ${error.message}`);
+        setInitialLoading(false);
+        setInitialLoadError(`No se pudo conectar con la base de datos. ${error.message}`);
+        retryTimer = window.setTimeout(
+          () => setInitialLoadAttempt((attempt) => attempt + 1),
+          5000,
+        );
       });
     return () => {
       active = false;
+      if (retryTimer) window.clearTimeout(retryTimer);
     };
-  }, []);
+  }, [initialLoadAttempt]);
   const goTo = (next) => {
     if (!can(next)) { setNotice("No tenés permiso para acceder a este módulo."); return; }
     setModule(next);
@@ -6347,6 +6508,7 @@ function Dashboard({ onLogout, currentUser }) {
         initial={selectedProfessional || emptyProfessional}
         readOnly={view === "detail"}
         specialties={specialties}
+        locations={locations}
         onAddSpecialty={(value) =>
           setSpecialties((current) => [...current, value])
         }
@@ -6402,6 +6564,7 @@ function Dashboard({ onLogout, currentUser }) {
         initial={selectedPersonnel || emptyPersonnel}
         readOnly={view === "detail"}
         areas={areas}
+        locations={locations}
         onAddArea={(value) => setAreas((current) => [...current, value])}
         onCancel={() => {
           setView("list");
@@ -6842,6 +7005,13 @@ function Dashboard({ onLogout, currentUser }) {
   if (module !== "patients")
     return (
       <div className="flex min-h-screen bg-slate-50">
+        {(initialLoading || initialLoadError) && (
+          <DatabaseLoadingModal
+            error={initialLoadError}
+            autoRetry
+            onRetry={() => setInitialLoadAttempt((attempt) => attempt + 1)}
+          />
+        )}
         <div className="hidden lg:block">
           <div className="fixed inset-y-0 left-0">
             <Sidebar />
@@ -6913,6 +7083,13 @@ function Dashboard({ onLogout, currentUser }) {
     );
   return (
     <div className="flex min-h-screen bg-slate-50">
+      {(initialLoading || initialLoadError) && (
+        <DatabaseLoadingModal
+          error={initialLoadError}
+          autoRetry
+          onRetry={() => setInitialLoadAttempt((attempt) => attempt + 1)}
+        />
+      )}
       <div className="hidden lg:block">
         <div className="fixed inset-y-0 left-0">
           <Sidebar />
