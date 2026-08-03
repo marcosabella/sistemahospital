@@ -5,7 +5,16 @@ var connectionString = builder.Configuration.GetConnectionString("Hospital")
     ?? throw new InvalidOperationException("Falta ConnectionStrings:Hospital.");
 
 builder.Services.AddSingleton(new HospitalDatabase(connectionString));
-builder.Services.AddProblemDetails();
+builder.Services.AddProblemDetails(options =>
+{
+    options.CustomizeProblemDetails = context =>
+    {
+        if (!builder.Environment.IsDevelopment()) return;
+        var error = context.HttpContext.Features
+            .Get<Microsoft.AspNetCore.Diagnostics.IExceptionHandlerFeature>()?.Error;
+        if (error is not null) context.ProblemDetails.Detail = error.Message;
+    };
+});
 
 var app = builder.Build();
 app.UseExceptionHandler();
@@ -84,7 +93,7 @@ app.MapGet("/api/users", async (HospitalDatabase db,CancellationToken ct) =>
     var roles=await db.QueryAsync("SELECT idRol AS id,nombre,descripcion,activo FROM dbo.SistemaRol ORDER BY nombre",ct);
     var rolePermissions=await db.QueryAsync("SELECT idRol,modulo,accion FROM dbo.SistemaRolPermiso WHERE permitido=1",ct);
     var userRoles=await db.QueryAsync("SELECT idUsuario,idRol FROM dbo.SistemaUsuarioRol",ct);
-    var professionals=await db.QueryAsync("SELECT idProfesional AS id,apellido,nombre,CONVERT(nvarchar(30),matricula_profesional) AS matricula FROM dbo.Profesionales ORDER BY apellido,nombre",ct);
+    var professionals=await db.QueryAsync("SELECT idProfesional AS id,CONVERT(nvarchar(20),dni) AS dni,apellido,nombre,CONVERT(nvarchar(30),matricula_profesional) AS matricula FROM dbo.Profesionales ORDER BY apellido,nombre",ct);
     return Results.Ok(new{users,permissions,roles,rolePermissions,userRoles,professionals});
 });
 app.MapPost("/api/users", async (UserInput input,HospitalDatabase db,CancellationToken ct) =>
@@ -1004,26 +1013,28 @@ app.MapGet("/api/cabos/{id:int}", async (int id, HospitalDatabase db, Cancellati
 app.MapGet("/api/cobros/{id:int}/cabos-debito", async (int id, int? caboId, DateOnly? fechaPrestacion, int? obraSocialId, HospitalDatabase db, CancellationToken ct) =>
 {
     var rows = await db.QueryAsync("""
-        CREATE TABLE #cabosDebito (
-            idCabo int, idNomencladorXcabo int, idRegistroCobro int, fechaCobroCabo date,
-            codigo nvarchar(255), descripcion nvarchar(max), cantidad int,
-            montoPractica decimal(18,4), montoCabo decimal(18,4), profesional nvarchar(510),
-            montoDebito numeric(18,4), idProfesionalXpractica int
-        );
-        INSERT INTO #cabosDebito
-        EXEC dbo.sp_buscarTodosCabosParaDebito @idRegistroCobro=@id, @idCaboBusqueda=@caboId;
-        SELECT DISTINCT d.idProfesionalXpractica AS id,
-               CONCAT(N'DEBIT-', idProfesionalXpractica) AS [key],
-               d.idCabo, CONVERT(nvarchar(20), d.idCabo) AS numeroCabo,
-               CONVERT(nvarchar(255), d.codigo) AS idPractica, d.descripcion AS practica,
-               d.profesional, d.montoCabo, d.montoDebito
-        FROM #cabosDebito d
-        INNER JOIN dbo.Cabo c ON c.idCabo = d.idCabo
-        WHERE (@fechaPrestacion IS NULL OR
-               (MONTH(c.fechaAltaInternacion) = MONTH(@fechaPrestacion) AND
-                YEAR(c.fechaAltaInternacion) = YEAR(@fechaPrestacion)))
+        SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
+        SELECT DISTINCT px.idProfesionalXpractica AS id,
+               CONCAT(N'DEBIT-', px.idProfesionalXpractica) AS [key],
+               c.idCabo, CONVERT(nvarchar(20), c.idCabo) AS numeroCabo,
+               CONVERT(varchar(10), COALESCE(c.fechaAltaInternacion, c.fechaCabo), 23) AS fechaPrestacion,
+               CONVERT(nvarchar(255), n.Codigos) AS idPractica, n.Descripcion AS practica,
+               LTRIM(RTRIM(CONCAT(p.apellido, N' ', p.nombre))) AS profesional,
+               COALESCE(nx.cantidad, 1) * COALESCE(nx.montoPractica, 0) AS montoCabo,
+               COALESCE(px.debito, 0) AS montoDebito
+        FROM dbo.RegistroCobroOS r
+        INNER JOIN dbo.Cabo c ON c.idObraSocial = r.idObraSocial
+        INNER JOIN dbo.NomencladorXcabo nx ON nx.idCabo = c.idCabo
+        INNER JOIN dbo.Nomenclador n ON n.Id = nx.idNomenclador
+        INNER JOIN dbo.ProfesionalXpractica px ON px.idCabo = c.idCabo AND px.idNomencladorXcabo = nx.idNomencladoXcabo
+        LEFT JOIN dbo.Profesionales p ON p.idProfesional = px.idProfesional
+        WHERE r.idRegistro = @id
+          AND (@caboId = 0 OR c.idCabo = @caboId)
+          AND (@fechaPrestacion IS NULL OR
+               (MONTH(COALESCE(c.fechaAltaInternacion, c.fechaCabo)) = MONTH(@fechaPrestacion) AND
+                YEAR(COALESCE(c.fechaAltaInternacion, c.fechaCabo)) = YEAR(@fechaPrestacion)))
           AND (@obraSocialId IS NULL OR c.idObraSocial = @obraSocialId)
-        ORDER BY d.idCabo, d.idProfesionalXpractica;
+        ORDER BY c.idCabo, px.idProfesionalXpractica;
         """, ct, new() {
             ["id"] = id, ["caboId"] = caboId ?? 0,
             ["fechaPrestacion"] = fechaPrestacion?.ToDateTime(TimeOnly.MinValue), ["obraSocialId"] = obraSocialId
@@ -1493,7 +1504,7 @@ sealed record CaboPracticeInput(string Codigo,string? Descripcion,decimal? Aranc
 sealed record CaboDiagnosisInput(string Codigo,string? Descripcion,string? Observaciones);
 sealed record CaboMedicationInput(int MedicamentoId,string? Producto,string? Presentacion,int? Cantidad);
 sealed record CaboLaboratoryInput(int? LaboratorioId,string Codigo,string? Descripcion,decimal? Arancel,decimal? Monto,decimal? Cantidad);
-sealed record CaboInput(object? Id,string Fecha,string? Numero,string? CodigoRefes,int PacienteCodigo,string? Dni,string? Nombre,string? Edad,string? Sexo,string? Beneficiario,string? Parentesco,string ObraSocial,string Rnos,string TipoAtencion,string? FechaAlta,CaboPracticeInput[]? Prestaciones,CaboDiagnosisInput[]? Diagnosticos,CaboMedicationInput[]? Medicamentos,CaboLaboratoryInput[]? Laboratorio)
+sealed record CaboInput(object? Id,string Fecha,string? Numero,string? CodigoRefes,int PacienteCodigo,string? Dni,string? Nombre,object? Edad,string? Sexo,string? Beneficiario,string? Parentesco,string ObraSocial,string Rnos,string TipoAtencion,string? FechaAlta,CaboPracticeInput[]? Prestaciones,CaboDiagnosisInput[]? Diagnosticos,CaboMedicationInput[]? Medicamentos,CaboLaboratoryInput[]? Laboratorio)
 {
     public Dictionary<string,object?> Parameters()=>new(){["fecha"]=Fecha,["codigoRefes"]=CodigoRefes,["paciente"]=PacienteCodigo,["obraSocial"]=ObraSocial,["rnos"]=Rnos,["tipo"]=TipoAtencion=="Internación"?3:TipoAtencion=="Práctica"||TipoAtencion=="Imagen"?2:1,["fechaAlta"]=string.IsNullOrWhiteSpace(FechaAlta)?null:FechaAlta};
     public object ToResponse(int id)=>new{id,numero=id.ToString(),fecha=Fecha,codigoRefes=CodigoRefes,pacienteCodigo=PacienteCodigo,dni=Dni,nombre=Nombre,edad=Edad,sexo=Sexo,beneficiario=Beneficiario,parentesco=Parentesco,obraSocial=ObraSocial,rnos=Rnos,tipoAtencion=TipoAtencion,fechaAlta=FechaAlta,prestaciones=Prestaciones??[],diagnosticos=Diagnosticos??[],medicamentos=Medicamentos??[],laboratorio=Laboratorio??[]};

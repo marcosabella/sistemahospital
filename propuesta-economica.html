@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Propuesta económica · Sistema de Gestión Hospitalaria</title>
+  <style>
+    @page { size: A4; margin: 0; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #e8f1f2; color: #183b45; font-family: "Segoe UI", Arial, sans-serif; }
+    .page { position: relative; width: 210mm; min-height: 297mm; overflow: hidden; background: #f7fafb; }
+    .top { position: relative; height: 69mm; padding: 18mm 17mm; overflow: hidden; color: white; background: linear-gradient(135deg, #086672 0%, #087f8c 58%, #0d5260 100%); }
+    .top:after { content: ""; position: absolute; width: 92mm; height: 92mm; right: -22mm; top: -42mm; border-radius: 50%; border: 1px solid rgba(255,255,255,.15); box-shadow: 0 0 0 15mm rgba(255,255,255,.035), 0 0 0 30mm rgba(255,255,255,.025); }
+    .brand { display: flex; align-items: center; gap: 11px; position: relative; z-index: 1; }
+    .brand img { width: 13mm; height: 13mm; }
+    .brand strong { display: block; font-size: 17px; line-height: 1.1; }
+    .brand span { display: block; margin-top: 4px; font-size: 8px; font-weight: 650; letter-spacing: 1.4px; text-transform: uppercase; color: #c9f3f5; }
+    .top h1 { position: relative; z-index: 1; margin: 13mm 0 0; font-size: 30px; line-height: 1.06; letter-spacing: -.7px; }
+    .top .subtitle { position: relative; z-index: 1; margin-top: 3mm; font-size: 12px; color: #d7f4f5; }
+    .meta { position: absolute; z-index: 1; right: 17mm; bottom: 18mm; text-align: right; font-size: 9px; line-height: 1.7; color: #d7f4f5; }
+    main { padding: 12mm 17mm 16mm; }
+    .intro { margin: 0; font-size: 11px; line-height: 1.6; color: #496872; }
+    h2 { margin: 8mm 0 4mm; font-size: 15px; color: #173f49; }
+    .modules { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3mm; }
+    .module { min-height: 21mm; padding: 4mm; border: 1px solid #dce8ea; border-radius: 3.5mm; background: white; }
+    .module .icon { display: grid; width: 8mm; height: 8mm; place-items: center; margin-bottom: 2.5mm; border-radius: 2.3mm; background: #e8f7f8; color: #087f8c; font-size: 14px; font-weight: 800; }
+    .module strong { display: block; font-size: 9.5px; color: #224b55; }
+    .module p { margin: 1.5mm 0 0; font-size: 7.8px; line-height: 1.4; color: #6b8289; }
+    .pricing { display: grid; grid-template-columns: 1.25fr 1fr; gap: 4mm; margin-top: 8mm; }
+    .price-main, .price-maintenance { padding: 6mm; border-radius: 4mm; }
+    .price-main { color: white; background: linear-gradient(135deg, #087f8c, #086672); box-shadow: 0 3mm 8mm rgba(8,102,114,.16); }
+    .price-maintenance { border: 1px solid #cfe3e6; background: white; }
+    .label { font-size: 8px; font-weight: 750; letter-spacing: 1.1px; text-transform: uppercase; }
+    .price-main .label { color: #c9f3f5; }
+    .price-maintenance .label { color: #5e7980; }
+    .amount { margin-top: 2.5mm; font-size: 25px; font-weight: 800; letter-spacing: -.5px; }
+    .price-maintenance .amount { color: #08727e; }
+    .detail { margin-top: 1.5mm; font-size: 8px; line-height: 1.4; opacity: .82; }
+    .notes { margin-top: 6mm; padding: 4mm 5mm; border-left: 1.2mm solid #11a2ae; border-radius: 0 3mm 3mm 0; background: #eaf6f7; font-size: 8px; line-height: 1.6; color: #536f77; }
+    footer { position: absolute; left: 17mm; right: 17mm; bottom: 10mm; display: flex; align-items: end; justify-content: space-between; padding-top: 4mm; border-top: 1px solid #d9e5e7; }
+    footer strong { display: block; font-size: 9px; color: #31565f; }
+    footer span { display: block; margin-top: 1mm; font-size: 7.5px; color: #819399; }
+    .version { text-align: right; }
+  </style>
+</head>
+<body>
+  <section class="page">
+    <header class="top">
+      <div class="brand">
+        <img src="favicon.svg" alt="Identidad del sistema">
+        <div><strong>Hospital Municipal Luis Rivero</strong><span>Salud pública · Gestión hospitalaria</span></div>
+      </div>
+      <h1>Propuesta económica</h1>
+      <p class="subtitle">Sistema integral de gestión hospitalaria</p>
+      <div class="meta">Jovita, Córdoba<br>3 de agosto de 2026</div>
+    </header>
+
+    <main>
+      <p class="intro">Propuesta para la provisión de una plataforma centralizada orientada a organizar la información administrativa y asistencial del hospital, facilitar las tareas diarias y mejorar el acceso seguro a los datos.</p>
+
+      <h2>Módulos incluidos</h2>
+      <div class="modules">
+        <article class="module"><div class="icon">01</div><strong>Pacientes e historia clínica</strong><p>Registro de pacientes, coberturas, antecedentes y atenciones.</p></article>
+        <article class="module"><div class="icon">02</div><strong>Turnos y disponibilidad</strong><p>Agenda de profesionales, horarios y seguimiento de turnos.</p></article>
+        <article class="module"><div class="icon">03</div><strong>Profesionales y personal</strong><p>Gestión de datos, especialidades, áreas y domicilios.</p></article>
+        <article class="module"><div class="icon">04</div><strong>CABOS y prestaciones</strong><p>Registro de prácticas, diagnósticos, laboratorio y medicamentos.</p></article>
+        <article class="module"><div class="icon">05</div><strong>Obras sociales y cobros</strong><p>Entidades, facturación, cobros, débitos y nomencladores.</p></article>
+        <article class="module"><div class="icon">06</div><strong>Liquidaciones y seguridad</strong><p>Informes, liquidaciones, usuarios, grupos y permisos.</p></article>
+      </div>
+
+      <h2>Inversión</h2>
+      <div class="pricing">
+        <section class="price-main">
+          <div class="label">Costo del sistema</div>
+          <div class="amount">$ 1.800.000</div>
+          <div class="detail">Inversión inicial · Pesos argentinos</div>
+        </section>
+        <section class="price-maintenance">
+          <div class="label">Mantenimiento mensual</div>
+          <div class="amount">$ 450.000</div>
+          <div class="detail">Abono mensual · Pesos argentinos</div>
+        </section>
+      </div>
+
+      <div class="notes"><strong>Alcance económico.</strong> Los importes corresponden al sistema descripto y al servicio mensual de mantenimiento. Cualquier ampliación funcional, integración externa o requerimiento adicional podrá presupuestarse por separado.</div>
+    </main>
+
+    <footer>
+      <div><strong>Marcos Abella</strong><span>Analista de Sistemas · Desarrollador</span></div>
+      <div class="version"><strong>Sistema de Gestión Hospitalaria</strong><span>Versión 0.1.0</span></div>
+    </footer>
+  </section>
+</body>
+</html>

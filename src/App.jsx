@@ -65,6 +65,7 @@ import {
   Pencil,
   Trash2,
   Eye,
+  EyeOff,
   BadgePercent,
   UserCog,
   Pill,
@@ -320,18 +321,18 @@ const normalizePatient = (patient) => ({
 const normalizeAppointment = (item) => ({ ...item, profesionalCodigo: String(item.profesionalCodigo ?? ""), pacienteCodigo: String(item.pacienteCodigo ?? ""), hora: String(item.hora || "").slice(0, 5) });
 const normalizeAvailability = (item) => ({ ...item, profesionalCodigo: String(item.profesionalCodigo ?? ""), desde: String(item.desde || "").slice(0, 5), hasta: String(item.hasta || "").slice(0, 5) });
 
-function Brand({ compact = false, sidebar = false }) {
+function Brand({ compact = false, sidebar = false, login = false }) {
   return (
-    <div className={`flex min-w-0 items-center ${sidebar ? "gap-2.5" : "gap-3"}`}>
-      <div className={`grid size-11 shrink-0 place-items-center rounded-xl text-white shadow-lg shadow-hospital-900/15 ${sidebar ? "bg-white/15 ring-1 ring-white/20" : "bg-hospital-600"}`}>
-        <HeartPulse size={25} strokeWidth={2.2} />
+    <div className={`flex min-w-0 items-center ${login ? "flex-col justify-center gap-4 text-center" : sidebar ? "gap-2.5" : "gap-3"}`}>
+      <div className={`grid shrink-0 place-items-center rounded-xl text-white shadow-lg shadow-hospital-900/15 ${login ? "size-14 bg-white/15 ring-1 ring-white/20" : sidebar ? "size-11 bg-white/15 ring-1 ring-white/20" : "size-11 bg-hospital-600"}`}>
+        <HeartPulse size={login ? 31 : 25} strokeWidth={2.2} />
       </div>
       {!compact && (
-        <div className="min-w-0 text-left">
-          <p className={`${sidebar ? "text-sm leading-snug text-white" : "text-lg leading-tight text-slate-800"} font-bold tracking-tight`}>
+        <div className={`min-w-0 ${login ? "text-center" : "text-left"}`}>
+          <p className={`${login ? "text-2xl leading-tight text-white sm:text-3xl" : sidebar ? "text-sm leading-snug text-white" : "text-lg leading-tight text-slate-800"} font-bold tracking-tight`}>
             Hospital Municipal Luis Rivero
           </p>
-          <p className={`${sidebar ? "mt-1 text-[9px] leading-4 tracking-[.11em] text-cyan-100" : "text-[11px] tracking-[.18em] text-hospital-600"} font-semibold uppercase`}>
+          <p className={`${login ? "mt-2 text-xs tracking-[.2em] text-cyan-100" : sidebar ? "mt-1 text-[9px] leading-4 tracking-[.11em] text-cyan-100" : "text-[11px] tracking-[.18em] text-hospital-600"} font-semibold uppercase`}>
             Salud pública · Gestión hospitalaria
           </p>
         </div>
@@ -554,6 +555,7 @@ function DatabaseLoadingModal({ error, onRetry, autoRetry = false }) {
 function Login({ onLogin }) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const submit = async (e) => {
@@ -569,11 +571,10 @@ function Login({ onLogin }) {
     <main className="login-screen grid min-h-screen lg:grid-cols-[1.05fr_.95fr]">
       {loading && <DatabaseLoadingModal />}
       <section className="relative hidden overflow-hidden login-pattern p-14 text-white lg:flex lg:flex-col lg:justify-between">
-        <Brand />
+        <div className="flex justify-center">
+          <Brand login />
+        </div>
         <div className="relative z-10 max-w-xl">
-          <div className="mb-8 grid size-16 place-items-center rounded-2xl bg-white/15 ring-1 ring-white/20">
-            <ShieldCheck size={34} />
-          </div>
           <h1 className="text-5xl font-bold leading-[1.08] tracking-tight">
             Cuidamos la gestión.
             <br />
@@ -584,9 +585,17 @@ function Login({ onLogin }) {
             pacientes.
           </p>
         </div>
-        <p className="text-sm text-cyan-50/65">
-          Información protegida · Acceso institucional
-        </p>
+        <div>
+          <p className="text-sm text-cyan-50/65">
+            Información protegida · Acceso institucional
+          </p>
+          <p className="mt-2 text-sm font-semibold text-cyan-50/85">
+            Desarrollado por Marcos Abella · Analista de Sistemas
+          </p>
+          <p className="mt-6 text-right text-xs font-medium tracking-wide text-cyan-100/60">
+            Versión 0.1.0
+          </p>
+        </div>
       </section>
       <section className="flex min-h-screen items-center justify-center bg-white px-6 py-12">
         <div className="w-full max-w-md">
@@ -614,13 +623,25 @@ function Login({ onLogin }) {
               />
             </Field>
             <Field label="Contraseña">
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Ingresá tu contraseña"
-                className="control"
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Ingresá tu contraseña"
+                  className="control pr-12"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((visible) => !visible)}
+                  className="absolute right-1.5 top-1/2 grid size-9 -translate-y-1/2 place-items-center rounded-lg text-slate-400 transition hover:bg-slate-100 hover:text-hospital-700"
+                  title={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                  aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                  aria-pressed={showPassword}
+                >
+                  {showPassword ? <EyeOff size={19} /> : <Eye size={19} />}
+                </button>
+              </div>
             </Field>
             {error && (
               <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
@@ -3888,6 +3909,7 @@ function CaboList({ cabos, onNew, onView, onEdit, onDelete, onLoadOlder, loading
 
 function DebitRegistration({
   obraSocial,
+  fechaPrestacion,
   cabos,
   procedureRows = [],
   value,
@@ -3902,9 +3924,14 @@ function DebitRegistration({
       currency: "ARS",
     }).format(Number(amount) || 0);
   const savedDebits = Array.isArray(value) ? value : [];
+  const selectedPeriod = String(fechaPrestacion || "").slice(0, 7);
   const eligibleRows = useMemo(
     () => procedureRows.length ? procedureRows : savedDebits.length ? savedDebits : (Array.isArray(cabos) ? cabos : [])
-        .filter((cabo) => cabo.obraSocial === obraSocial)
+        .filter((cabo) => {
+          const caboDate = cabo.fechaAlta || cabo.fecha || "";
+          return cabo.obraSocial === obraSocial &&
+            (!selectedPeriod || String(caboDate).slice(0, 7) === selectedPeriod);
+        })
         .flatMap((cabo) =>
           (Array.isArray(cabo.prestaciones) ? cabo.prestaciones : []).map(
             (practica, index) => {
@@ -3915,6 +3942,7 @@ function DebitRegistration({
                 idPractica: practica.codigo,
                 idCabo: cabo.id,
                 numeroCabo: cabo.numero,
+                fechaPrestacion: cabo.fechaAlta || cabo.fecha || "",
                 profesional:
                   [practica.profesional1, practica.profesional2]
                     .filter(Boolean)
@@ -3928,7 +3956,7 @@ function DebitRegistration({
             },
           ),
         ),
-    [cabos, obraSocial, value, procedureRows],
+    [cabos, obraSocial, selectedPeriod, value, procedureRows],
   );
   const [rows, setRows] = useState(eligibleRows);
   const filtered = rows.filter((row) =>
@@ -4011,6 +4039,7 @@ function DebitRegistration({
               <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-4 py-3">Nro Cabo</th>
+                  <th className="px-4 py-3">Fecha prestación</th>
                   <th className="px-4 py-3">Profesional</th>
                   <th className="px-4 py-3">Práctica</th>
                   <th className="px-4 py-3 text-right">Monto Cabo</th>
@@ -4023,6 +4052,9 @@ function DebitRegistration({
                     <tr key={row.key} className="border-t border-slate-100">
                       <td className="px-4 py-3 font-semibold text-hospital-700">
                         {row.numeroCabo}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-slate-600">
+                        {formatDate(row.fechaPrestacion)}
                       </td>
                       <td className="px-4 py-3 text-slate-600">
                         {row.profesional}
@@ -4056,7 +4088,7 @@ function DebitRegistration({
                 ) : (
                   <tr>
                     <td
-                      colSpan="5"
+                      colSpan="6"
                       className="px-6 py-12 text-center text-slate-500"
                     >
                       {rows.length
@@ -4316,6 +4348,7 @@ function CobroOSForm({
         {debitsOpen && (
           <DebitRegistration
             obraSocial={data.obraSocial}
+            fechaPrestacion={data.fechaPrestacion}
             cabos={cabos}
             procedureRows={debitRows}
             value={data.debitos}
@@ -6117,13 +6150,38 @@ const permissionModules = [
 ];
 const permissionActions = [["view", "Ver"], ["create", "Crear"], ["edit", "Editar"], ["delete", "Eliminar"], ["print", "Imprimir"]];
 
+function UserProfessionalSearchModal({ professionals, onSelect, onClear, onClose }) {
+  const [query, setQuery] = useState("");
+  const normalized = query.trim().toLocaleLowerCase();
+  const matches = professionals.filter((item) =>
+    `${item.apellido} ${item.nombre} ${item.dni || ""} ${item.matricula || ""}`
+      .toLocaleLowerCase()
+      .includes(normalized),
+  );
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-slate-900/50 p-4 backdrop-blur-[2px]" role="dialog" aria-modal="true" aria-labelledby="professional-search-title">
+      <div className="flex max-h-[85vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <header className="flex items-start justify-between border-b px-5 py-4 sm:px-6">
+          <div><h3 id="professional-search-title" className="font-bold text-slate-800">Buscar profesional</h3><p className="mt-1 text-sm text-slate-500">Buscá por nombre, apellido, DNI o matrícula.</p></div>
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100" aria-label="Cerrar"><X size={19}/></button>
+        </header>
+        <div className="border-b p-5 sm:px-6"><div className="relative"><Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={19}/><input autoFocus value={query} onChange={(event) => setQuery(event.target.value)} className="control pl-11" placeholder="Nombre, DNI o matrícula..."/></div></div>
+        <div className="min-h-56 flex-1 overflow-y-auto p-3 sm:p-4">
+          {matches.length ? matches.map((item) => <button key={item.id} type="button" onClick={() => onSelect(item)} className="w-full rounded-xl px-4 py-3 text-left hover:bg-hospital-50"><strong className="block text-slate-700">{item.apellido}, {item.nombre}</strong><span className="mt-1 block text-xs text-slate-500">{item.dni ? `DNI ${item.dni}` : "DNI no informado"}{item.matricula ? ` · Matrícula ${item.matricula}` : ""}</span></button>) : <div className="grid min-h-52 place-items-center text-center text-slate-400"><div><Search className="mx-auto" size={34}/><p className="mt-3 font-semibold">No encontramos profesionales</p></div></div>}
+        </div>
+        <footer className="flex flex-wrap justify-between gap-3 border-t bg-slate-50 px-5 py-4 sm:px-6"><button type="button" onClick={onClear} className="secondary">Quitar vinculación</button><button type="button" onClick={onClose} className="secondary">Cancelar</button></footer>
+      </div>
+    </div>
+  );
+}
+
 function UsersManagement({ onNotice }) {
   const [data,setData]=useState({users:[],permissions:[],roles:[],rolePermissions:[],userRoles:[],professionals:[]});
-  const [selected,setSelected]=useState(null),[selectedRole,setSelectedRole]=useState(null),[loading,setLoading]=useState(true);
+  const [selected,setSelected]=useState(null),[selectedRole,setSelectedRole]=useState(null),[loading,setLoading]=useState(true),[professionalSearchOpen,setProfessionalSearchOpen]=useState(false);
   const refresh=()=>{setLoading(true);loadUsers().then(setData).catch((e)=>onNotice(`No se pudieron cargar los usuarios: ${e.message}`)).finally(()=>setLoading(false));};
   useEffect(refresh,[]);
-  const edit=(user)=>setSelected({...user,password:"",rolIds:data.userRoles.filter((item)=>Number(item.idUsuario)===Number(user.id)).map((item)=>Number(item.idRol)),permisos:data.permissions.filter((p)=>Number(p.idUsuario)===Number(user.id)).map((p)=>({modulo:p.modulo,accion:p.accion}))});
-  const create=()=>setSelected({usuario:"",nombre:"",password:"",activo:true,administrador:false,profesionalId:"",rolIds:[],permisos:[]});
+  const edit=(user)=>{setProfessionalSearchOpen(false);setSelected({...user,password:"",rolIds:data.userRoles.filter((item)=>Number(item.idUsuario)===Number(user.id)).map((item)=>Number(item.idRol)),permisos:data.permissions.filter((p)=>Number(p.idUsuario)===Number(user.id)).map((p)=>({modulo:p.modulo,accion:p.accion}))});};
+  const create=()=>{setProfessionalSearchOpen(false);setSelected({usuario:"",nombre:"",password:"",activo:true,administrador:false,profesionalId:"",rolIds:[],permisos:[]});};
   const togglePermission=(setter,modulo,accion)=>setter((current)=>{const exists=current.permisos.some((p)=>p.modulo===modulo&&p.accion===accion);return{...current,permisos:exists?current.permisos.filter((p)=>p.modulo!==modulo||p.accion!==accion):[...current.permisos,{modulo,accion}]};});
   const save=async()=>{if(!selected.usuario.trim()||selected.usuario.includes("@")||(!selected.id&&selected.password.length<8))return onNotice("Ingresá un usuario sin @ y una contraseña de al menos 8 caracteres.");try{await persistUser({...selected,profesionalId:selected.profesionalId?Number(selected.profesionalId):null});setSelected(null);refresh();onNotice("Usuario, profesional y roles guardados correctamente.");}catch(e){onNotice(`No se pudo guardar el usuario: ${e.message}`);}};
   const editRole=(role)=>setSelectedRole({...role,permisos:data.rolePermissions.filter((p)=>Number(p.idRol)===Number(role.id)).map((p)=>({modulo:p.modulo,accion:p.accion}))});
@@ -6131,7 +6189,24 @@ function UsersManagement({ onNotice }) {
   const saveSelectedRole=async()=>{if(!selectedRole.nombre.trim())return onNotice("Ingresá el nombre del grupo.");try{await persistRole(selectedRole);setSelectedRole(null);refresh();onNotice("Grupo de usuarios guardado correctamente.");}catch(e){onNotice(`No se pudo guardar el grupo: ${e.message}`);}};
   const PermissionMatrix=({value,setter})=><div className="overflow-x-auto rounded-2xl border bg-white"><table className="w-full text-sm"><thead className="bg-slate-50"><tr><th className="px-4 py-3 text-left">Módulo</th>{permissionActions.map(([,label])=><th key={label} className="px-3 py-3">{label}</th>)}</tr></thead><tbody>{permissionModules.map(([modulo,label])=><tr key={modulo} className="border-t"><td className="px-4 py-3 font-semibold">{label}</td>{permissionActions.map(([accion])=><td key={accion} className="text-center"><input type="checkbox" checked={value.permisos.some((p)=>p.modulo===modulo&&p.accion===accion)} onChange={()=>togglePermission(setter,modulo,accion)}/></td>)}</tr>)}</tbody></table></div>;
   if(selectedRole)return <section className="space-y-5"><div className="flex items-center justify-between"><h2 className="text-2xl font-bold">{selectedRole.id?"Modificar grupo":"Nuevo grupo"}</h2><button onClick={()=>setSelectedRole(null)} className="secondary">Volver</button></div><div className="grid gap-4 rounded-2xl border bg-white p-5 sm:grid-cols-2"><Field label="Nombre del grupo"><input value={selectedRole.nombre} onChange={(e)=>setSelectedRole({...selectedRole,nombre:e.target.value})} className="control"/></Field><Field label="Descripción"><input value={selectedRole.descripcion||""} onChange={(e)=>setSelectedRole({...selectedRole,descripcion:e.target.value})} className="control"/></Field><label className="flex items-center gap-2"><input type="checkbox" checked={selectedRole.activo} onChange={(e)=>setSelectedRole({...selectedRole,activo:e.target.checked})}/> Grupo activo</label></div><PermissionMatrix value={selectedRole} setter={setSelectedRole}/><div className="flex justify-end"><button onClick={saveSelectedRole} className="primary">Guardar grupo</button></div></section>;
-  if(selected)return <section className="space-y-5"><div className="flex items-center justify-between"><h2 className="text-2xl font-bold">{selected.id?"Modificar usuario":"Nuevo usuario"}</h2><button onClick={()=>setSelected(null)} className="secondary">Volver</button></div><div className="grid gap-4 rounded-2xl border bg-white p-5 sm:grid-cols-2"><Field label="Nombre de usuario"><input value={selected.usuario} onChange={(e)=>setSelected({...selected,usuario:e.target.value.replace(/\s/g,"")})} className="control"/></Field><Field label="Nombre y apellido"><input value={selected.nombre} onChange={(e)=>setSelected({...selected,nombre:e.target.value})} className="control"/></Field><Field label={selected.id?"Nueva contraseña (opcional)":"Contraseña"}><input type="password" value={selected.password} onChange={(e)=>setSelected({...selected,password:e.target.value})} className="control"/></Field><Field label="Profesional vinculado"><select value={selected.profesionalId||""} onChange={(e)=>setSelected({...selected,profesionalId:e.target.value})} className="control"><option value="">Sin profesional vinculado</option>{data.professionals.map((item)=><option key={item.id} value={item.id}>{item.apellido}, {item.nombre}{item.matricula?` · Mat. ${item.matricula}`:""}</option>)}</select></Field><div className="flex items-center gap-6"><label className="flex gap-2"><input type="checkbox" checked={selected.activo} onChange={(e)=>setSelected({...selected,activo:e.target.checked})}/> Activo</label><label className="flex gap-2"><input type="checkbox" checked={selected.administrador} onChange={(e)=>setSelected({...selected,administrador:e.target.checked})}/> Administrador</label></div></div><div className="rounded-2xl border bg-white p-5"><h3 className="font-bold text-slate-800">Grupos asignados</h3><div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{data.roles.map((role)=><label key={role.id} className="flex gap-3 rounded-xl border p-3"><input type="checkbox" checked={selected.rolIds.includes(Number(role.id))} onChange={()=>setSelected((current)=>({...current,rolIds:current.rolIds.includes(Number(role.id))?current.rolIds.filter((id)=>id!==Number(role.id)):[...current.rolIds,Number(role.id)]}))}/><span><strong className="block">{role.nombre}</strong><small className="text-slate-500">{role.descripcion}</small></span></label>)}</div></div>{selected.administrador&&<div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">El administrador tiene acceso total. Los grupos y permisos quedan guardados si luego cambia a usuario común.</div>}<div><h3 className="mb-3 font-bold text-slate-800">Permisos individuales adicionales</h3><PermissionMatrix value={selected} setter={setSelected}/></div><div className="flex justify-end"><button onClick={save} className="primary">Guardar usuario</button></div></section>;
+  if(selected) {
+    const linkedProfessional=data.professionals.find((item)=>Number(item.id)===Number(selected.profesionalId));
+    return <section className="space-y-5">
+      <div className="flex items-center justify-between"><h2 className="text-2xl font-bold">{selected.id?"Modificar usuario":"Nuevo usuario"}</h2><button onClick={()=>setSelected(null)} className="secondary">Volver</button></div>
+      <div className="grid gap-4 rounded-2xl border bg-white p-5 sm:grid-cols-2">
+        <Field label="Nombre de usuario"><input value={selected.usuario} onChange={(e)=>setSelected({...selected,usuario:e.target.value.replace(/\s/g,"")})} className="control"/></Field>
+        <Field label="Nombre y apellido"><input value={selected.nombre} onChange={(e)=>setSelected({...selected,nombre:e.target.value})} className="control"/></Field>
+        <Field label={selected.id?"Nueva contraseña (opcional)":"Contraseña"}><input type="password" value={selected.password} onChange={(e)=>setSelected({...selected,password:e.target.value})} className="control"/></Field>
+        <Field label="Profesional vinculado"><div className="flex gap-2"><input readOnly value={linkedProfessional?`${linkedProfessional.apellido}, ${linkedProfessional.nombre}${linkedProfessional.matricula?` · Mat. ${linkedProfessional.matricula}`:""}`:""} placeholder="Sin profesional vinculado" className="control bg-slate-50"/><button type="button" onClick={()=>setProfessionalSearchOpen(true)} className="icon-button" title="Buscar profesional" aria-label="Buscar profesional"><Search size={19}/></button></div></Field>
+        <div className="flex items-center gap-6"><label className="flex gap-2"><input type="checkbox" checked={selected.activo} onChange={(e)=>setSelected({...selected,activo:e.target.checked})}/> Activo</label><label className="flex gap-2"><input type="checkbox" checked={selected.administrador} onChange={(e)=>setSelected({...selected,administrador:e.target.checked})}/> Administrador</label></div>
+      </div>
+      <div className="rounded-2xl border bg-white p-5"><h3 className="font-bold text-slate-800">Grupos asignados</h3><div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{data.roles.map((role)=><label key={role.id} className="flex gap-3 rounded-xl border p-3"><input type="checkbox" checked={selected.rolIds.includes(Number(role.id))} onChange={()=>setSelected((current)=>({...current,rolIds:current.rolIds.includes(Number(role.id))?current.rolIds.filter((id)=>id!==Number(role.id)):[...current.rolIds,Number(role.id)]}))}/><span><strong className="block">{role.nombre}</strong><small className="text-slate-500">{role.descripcion}</small></span></label>)}</div></div>
+      {selected.administrador&&<div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">El administrador tiene acceso total. Los grupos y permisos quedan guardados si luego cambia a usuario común.</div>}
+      <div><h3 className="mb-3 font-bold text-slate-800">Permisos individuales adicionales</h3><PermissionMatrix value={selected} setter={setSelected}/></div>
+      <div className="flex justify-end"><button onClick={save} className="primary">Guardar usuario</button></div>
+      {professionalSearchOpen&&<UserProfessionalSearchModal professionals={data.professionals} onSelect={(professional)=>{setSelected((current)=>({...current,profesionalId:professional.id}));setProfessionalSearchOpen(false);}} onClear={()=>{setSelected((current)=>({...current,profesionalId:""}));setProfessionalSearchOpen(false);}} onClose={()=>setProfessionalSearchOpen(false)}/>} 
+    </section>;
+  }
   return <section className="space-y-5"><div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-2xl font-bold">Usuarios y permisos</h2><div className="flex gap-3"><button onClick={createRole} className="secondary"><UsersRound size={18}/> Nuevo grupo</button><button onClick={create} className="primary"><Plus size={18}/> Nuevo usuario</button></div></div><div className="grid gap-5 xl:grid-cols-[1fr_340px]"><div className="overflow-x-auto rounded-2xl border bg-white"><table className="w-full min-w-[760px] text-sm"><thead className="bg-slate-50"><tr><th className="px-5 py-3 text-left">Usuario</th><th className="px-5 py-3 text-left">Nombre</th><th className="px-5 py-3 text-left">Profesional</th><th className="px-5 py-3">Grupos</th><th></th></tr></thead><tbody>{data.users.map((user)=>{const professional=data.professionals.find((item)=>Number(item.id)===Number(user.profesionalId));const roleNames=data.userRoles.filter((item)=>Number(item.idUsuario)===Number(user.id)).map((item)=>data.roles.find((role)=>Number(role.id)===Number(item.idRol))?.nombre).filter(Boolean);return <tr key={user.id} className="border-t"><td className="px-5 py-4 font-bold">{user.usuario}</td><td className="px-5 py-4">{user.nombre}</td><td className="px-5 py-4">{professional?`${professional.apellido}, ${professional.nombre}`:"—"}</td><td className="px-5 py-4 text-center">{user.administrador?"Administrador":roleNames.join(", ")||"Sin grupo"}</td><td className="px-5 py-4 text-right"><button onClick={()=>edit(user)} className="font-semibold text-hospital-700">Editar</button></td></tr>})}{!loading&&!data.users.length&&<tr><td colSpan="5" className="p-10 text-center text-slate-400">Sin usuarios.</td></tr>}</tbody></table></div><aside className="rounded-2xl border bg-white p-5"><div className="flex items-center justify-between"><h3 className="font-bold">Grupos</h3><button onClick={createRole} className="text-sm font-semibold text-hospital-700">Agregar</button></div><div className="mt-4 space-y-2">{data.roles.map((role)=><button key={role.id} onClick={()=>editRole(role)} className="w-full rounded-xl border p-3 text-left hover:bg-slate-50"><strong className="block">{role.nombre}</strong><span className="text-xs text-slate-500">{role.descripcion||"Sin descripción"}</span></button>)}</div></aside></div></section>;
 }
 
