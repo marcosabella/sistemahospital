@@ -1208,9 +1208,27 @@ app.MapGet("/api/clinical-records/patients/{id:int}", async (int id, HospitalDat
         LEFT JOIN dbo.SistemaUsuario u ON u.idUsuario=h.idUsuarioCreacion
         WHERE h.idPaciente=@id ORDER BY h.fechaAtencion DESC, h.idRegistro DESC
         """, ct, new() { ["id"] = id });
-    await Task.WhenAll(patientTask, appointmentsTask, cabosTask, recordsTask);
+    var reportsTask = db.QueryAsync("""
+        SELECT i.idInforme AS id, i.idRegistro AS registroId, i.idTurno AS turnoId, i.idCabo AS caboId, i.tipoPractica,
+               CONVERT(varchar(10), i.fechaPractica, 23) AS fechaPractica,
+               i.titulo, i.descripcion, u.nombre AS registradoPor,
+               CONVERT(varchar(16), i.fechaCreacion, 120) AS fechaCreacion,
+               a.idArchivo AS archivoId, a.nombre AS archivoNombre,
+               a.tipoContenido AS archivoTipo, a.tamano AS archivoTamano
+        FROM dbo.HistoriaClinicaInforme i
+        LEFT JOIN dbo.SistemaUsuario u ON u.idUsuario=i.idUsuarioCreacion
+        LEFT JOIN dbo.HistoriaClinicaInformeArchivo a ON a.idInforme=i.idInforme
+        WHERE i.idPaciente=@id ORDER BY i.fechaPractica DESC, i.idInforme DESC, a.idArchivo
+        """, ct, new() { ["id"] = id });
+    await Task.WhenAll(patientTask, appointmentsTask, cabosTask, recordsTask, reportsTask);
     if (patientTask.Result.Count == 0) return Results.NotFound();
-    return Results.Ok(new { patient = patientTask.Result[0], appointments = appointmentsTask.Result, cabos = cabosTask.Result, records = recordsTask.Result });
+    var reports = reportsTask.Result.GroupBy(row => Convert.ToInt32(row["id"])).Select(group => new {
+        id = group.Key, registroId = group.First()["registroId"], turnoId = group.First()["turnoId"], caboId = group.First()["caboId"], tipoPractica = group.First()["tipoPractica"],
+        fechaPractica = group.First()["fechaPractica"], titulo = group.First()["titulo"], descripcion = group.First()["descripcion"],
+        registradoPor = group.First()["registradoPor"], fechaCreacion = group.First()["fechaCreacion"],
+        archivos = group.Where(row => row["archivoId"] is not null).Select(row => new { id = row["archivoId"], nombre = row["archivoNombre"], tipo = row["archivoTipo"], tamano = row["archivoTamano"] })
+    });
+    return Results.Ok(new { patient = patientTask.Result[0], appointments = appointmentsTask.Result, cabos = cabosTask.Result, records = recordsTask.Result, reports });
 });
 
 app.MapPost("/api/clinical-records", async (ClinicalRecordInput input, HttpContext context, HospitalDatabase db, CancellationToken ct) =>
@@ -1226,6 +1244,56 @@ app.MapPost("/api/clinical-records", async (ClinicalRecordInput input, HttpConte
         VALUES(@paciente,@profesional,@turno,@cabo,@fecha,@descripcion,@pedidos,@laboratorio,@usuario)
         """, parameters, ct);
     return Results.Created($"/api/clinical-records/{id}", new { id });
+});
+
+app.MapPost("/api/clinical-records/reports", async (HttpRequest request, HttpContext context, HospitalDatabase db, CancellationToken ct) =>
+{
+    if (!request.HasFormContentType) return Results.BadRequest(new { detail = "Enviá el informe como formulario con archivos." });
+    var form = await request.ReadFormAsync(ct);
+    if (!int.TryParse(form["pacienteId"], out var pacienteId) || pacienteId <= 0 ||
+        !DateOnly.TryParse(form["fechaPractica"], out var fechaPractica) ||
+        string.IsNullOrWhiteSpace(form["tipoPractica"]) || string.IsNullOrWhiteSpace(form["titulo"]))
+        return Results.BadRequest(new { detail = "Completá paciente, práctica, fecha y título." });
+    if (form.Files.Count is < 1 or > 5) return Results.BadRequest(new { detail = "Adjuntá entre 1 y 5 archivos." });
+    var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "application/pdf", "image/jpeg", "image/png", "image/webp" };
+    if (form.Files.Any(file => file.Length <= 0 || file.Length > 10 * 1024 * 1024 || !allowed.Contains(file.ContentType)))
+        return Results.BadRequest(new { detail = "Solo se aceptan PDF, JPG, PNG o WEBP de hasta 10 MB cada uno." });
+    int? registroId = int.TryParse(form["registroId"], out var parsedRecord) && parsedRecord > 0 ? parsedRecord : null;
+    int? turnoId = int.TryParse(form["turnoId"], out var parsedAppointment) && parsedAppointment > 0 ? parsedAppointment : null;
+    int? caboId = int.TryParse(form["caboId"], out var parsedCabo) && parsedCabo > 0 ? parsedCabo : null;
+    if (new[] { registroId, turnoId, caboId }.Count(value => value.HasValue) > 1)
+        return Results.BadRequest(new { detail = "Seleccioná una sola atención relacionada." });
+    var validRelation = await db.ScalarAsync<int>("""
+        SELECT CASE WHEN EXISTS(SELECT 1 FROM dbo.Paciente WHERE idPaciente=@paciente)
+          AND (@registro IS NULL OR EXISTS(SELECT 1 FROM dbo.HistoriaClinicaRegistro WHERE idRegistro=@registro AND idPaciente=@paciente))
+          AND (@turno IS NULL OR EXISTS(SELECT 1 FROM dbo.Turno WHERE idTurno=@turno AND idPaciente=@paciente))
+          AND (@cabo IS NULL OR EXISTS(SELECT 1 FROM dbo.Cabo WHERE idCabo=@cabo AND idPaciente=@paciente))
+          THEN 1 ELSE 0 END
+        """, new() { ["paciente"] = pacienteId, ["registro"] = registroId, ["turno"] = turnoId, ["cabo"] = caboId }, ct);
+    if (validRelation == 0) return Results.BadRequest(new { detail = "El paciente o la atención relacionada no son válidos." });
+    var current = (Dictionary<string, object?>)context.Items["user"]!;
+    var reportId = await db.ScalarAsync<int>("""
+        INSERT dbo.HistoriaClinicaInforme(idPaciente,idRegistro,idTurno,idCabo,tipoPractica,fechaPractica,titulo,descripcion,idUsuarioCreacion)
+        OUTPUT INSERTED.idInforme VALUES(@paciente,@registro,@turno,@cabo,@tipo,@fecha,@titulo,@descripcion,@usuario)
+        """, new() { ["paciente"] = pacienteId, ["registro"] = registroId, ["turno"] = turnoId, ["cabo"] = caboId, ["tipo"] = form["tipoPractica"].ToString().Trim(),
+            ["fecha"] = fechaPractica.ToDateTime(TimeOnly.MinValue), ["titulo"] = form["titulo"].ToString().Trim(),
+            ["descripcion"] = string.IsNullOrWhiteSpace(form["descripcion"]) ? null : form["descripcion"].ToString().Trim(), ["usuario"] = current["idUsuario"] }, ct);
+    foreach (var file in form.Files)
+    {
+        await using var stream = file.OpenReadStream();
+        using var memory = new MemoryStream();
+        await stream.CopyToAsync(memory, ct);
+        await db.ExecuteAsync("INSERT dbo.HistoriaClinicaInformeArchivo(idInforme,nombre,tipoContenido,tamano,contenido) VALUES(@informe,@nombre,@tipo,@tamano,@contenido)",
+            new() { ["informe"] = reportId, ["nombre"] = Path.GetFileName(file.FileName), ["tipo"] = file.ContentType, ["tamano"] = file.Length, ["contenido"] = memory.ToArray() }, ct);
+    }
+    return Results.Created($"/api/clinical-records/reports/{reportId}", new { id = reportId });
+});
+
+app.MapGet("/api/clinical-records/reports/files/{id:int}", async (int id, HospitalDatabase db, CancellationToken ct) =>
+{
+    var rows = await db.QueryAsync("SELECT nombre,tipoContenido,contenido FROM dbo.HistoriaClinicaInformeArchivo WHERE idArchivo=@id", ct, new() { ["id"] = id });
+    if (rows.Count == 0) return Results.NotFound();
+    return Results.File((byte[])rows[0]["contenido"]!, rows[0]["tipoContenido"]?.ToString() ?? "application/octet-stream", rows[0]["nombre"]?.ToString());
 });
 
 app.MapPost("/api/patients", async (PatientInput input, HospitalDatabase db, CancellationToken ct) =>

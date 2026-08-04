@@ -31,6 +31,23 @@ export const loadStatistics = filters => {
 }
 export const loadClinicalHistory = patientId => authFetch(`/api/clinical-records/patients/${patientId}`).then(parseResponse)
 export const saveClinicalRecord = item => send('/api/clinical-records', 'POST', item)
+export const savePracticeReport = item => {
+  const form = new FormData()
+  form.append('pacienteId', item.pacienteId)
+  if (item.registroId) form.append('registroId', item.registroId)
+  if (item.turnoId) form.append('turnoId', item.turnoId)
+  if (item.caboId) form.append('caboId', item.caboId)
+  form.append('tipoPractica', item.tipoPractica)
+  form.append('fechaPractica', item.fechaPractica)
+  form.append('titulo', item.titulo)
+  form.append('descripcion', item.descripcion || '')
+  item.archivos.forEach(file => form.append('archivos', file))
+  return authFetch('/api/clinical-records/reports', { method: 'POST', body: form }).then(parseResponse)
+}
+export const downloadPracticeReportFile = id => authFetch(`/api/clinical-records/reports/files/${id}`).then(async response => {
+  if (!response.ok) return parseResponse(response)
+  return response.blob()
+})
 export const loadHealthInsurances = () => authFetch('/api/catalogs/health-insurances').then(parseResponse)
 export const loadHealthInsuranceLiquidation = (healthInsuranceId, from, to) => {
   const params = new URLSearchParams({ healthInsuranceId, from, to })
