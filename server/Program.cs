@@ -5,6 +5,7 @@ var connectionString = builder.Configuration.GetConnectionString("Hospital")
     ?? throw new InvalidOperationException("Falta ConnectionStrings:Hospital.");
 
 builder.Services.AddSingleton(new HospitalDatabase(connectionString));
+builder.Services.AddResponseCompression(options => options.EnableForHttps = true);
 builder.Services.AddProblemDetails(options =>
 {
     options.CustomizeProblemDetails = context =>
@@ -18,12 +19,13 @@ builder.Services.AddProblemDetails(options =>
 
 var app = builder.Build();
 app.UseExceptionHandler();
+app.UseResponseCompression();
 
 var database = app.Services.GetRequiredService<HospitalDatabase>();
 var migrationsPath = Path.Combine(app.Environment.ContentRootPath, "Migrations");
 if (Directory.Exists(migrationsPath))
     foreach (var migration in Directory.GetFiles(migrationsPath, "*.sql").OrderBy(path => path))
-        await database.ExecuteAsync(await File.ReadAllTextAsync(migration), new(), CancellationToken.None);
+        await database.ExecuteAsync(await File.ReadAllTextAsync(migration), new(), CancellationToken.None, commandTimeout: 600);
 
 app.MapPost("/api/auth/login", async (LoginInput input, HospitalDatabase db, CancellationToken ct) =>
 {
@@ -185,7 +187,9 @@ app.MapGet("/api/bootstrap", async (HttpContext context, HospitalDatabase db, Ca
         """,cancellationToken,new(){["id"]=currentUser["idUsuario"]})).Select(row=>Convert.ToString(row["modulo"])!));
     bool Has(params string[] modules)=>isAdmin||modules.Any(granted.Contains);
     IReadOnlyList<Dictionary<string,object?>> Empty()=>Array.Empty<Dictionary<string,object?>>();
-    var patientsTask = db.QueryAsync("""
+    Task<IReadOnlyList<Dictionary<string,object?>>> QueryIf(bool required,string sql,CancellationToken _,Dictionary<string,object?>? parameters=null)
+        =>required?db.QueryAsync(sql,cancellationToken,parameters):Task.FromResult(Empty());
+    var patientsTask = QueryIf(Has("patients","appointments","cabos","clinical-history"),"""
         SELECT p.idPaciente AS codigo, CONVERT(nvarchar(20),p.dni) AS dni, p.nombre, p.apellido,
                CONVERT(varchar(10), p.fecha_nacimiento, 23) AS nacimiento,
                CASE p.sexo WHEN 1 THEN N'Masculino' WHEN 2 THEN N'Femenino' ELSE NULL END AS sexo,
@@ -218,7 +222,7 @@ app.MapGet("/api/bootstrap", async (HttpContext context, HospitalDatabase db, Ca
         ORDER BY p.apellido, p.nombre
         """, cancellationToken);
 
-    var professionalsTask = db.QueryAsync("""
+    var professionalsTask = QueryIf(Has("professionals","appointments","cabos","clinical-history","liquidacion-profesionales"),"""
         SELECT p.idProfesional AS codigo, CONVERT(nvarchar(20),p.dni) AS dni, p.nombre, p.apellido,
                p.telefonoFijo AS telefono, p.telefonoCelular AS celular,
                p.matricula_profesional AS matricula, CONVERT(nvarchar(30),p.porc_autogestion) AS autogestion,
@@ -233,7 +237,7 @@ app.MapGet("/api/bootstrap", async (HttpContext context, HospitalDatabase db, Ca
         ORDER BY p.apellido, p.nombre
         """, cancellationToken);
 
-    var personnelTask = db.QueryAsync("""
+    var personnelTask = QueryIf(Has("personnel","liquidacion-personal"),"""
         SELECT p.idPersonal AS codigo, CONVERT(nvarchar(20),p.dni) AS dni, p.nombre, p.apellido,
                p.telefonoFijo AS telefono, p.telefonoCelular AS celular,
                a.descripcion AS area, p.calle, p.numero,
@@ -247,18 +251,18 @@ app.MapGet("/api/bootstrap", async (HttpContext context, HospitalDatabase db, Ca
         ORDER BY p.apellido, p.nombre
         """, cancellationToken);
 
-    var medicationsTask = db.QueryAsync("""
+    var medicationsTask = QueryIf(Has("medications","cabos"),"""
         SELECT idMedicamento AS id, producto, presentacion, precio
         FROM dbo.Medicamentos ORDER BY producto
         """, cancellationToken);
 
-    var healthInsurancesTask = db.QueryAsync("""
+    var healthInsurancesTask = QueryIf(Has("health-insurances","cabos","cobros-os","liquidacion-obra-social"),"""
         SELECT Id AS id, CONVERT(nvarchar(50), codigo) AS codigo, descripcion, sigla,
                calle, numero, localidad, cp AS codigoPostal
         FROM dbo.ObraSocial ORDER BY descripcion
         """, cancellationToken);
 
-    var nomenclaturesTask = db.QueryAsync("""
+    var nomenclaturesTask = QueryIf(Has("nomenclature","cabos"),"""
         WITH Aranceles AS (
             SELECT Codigos, Arancel
             FROM dbo.Arancel_Nomenclador
@@ -274,12 +278,12 @@ app.MapGet("/api/bootstrap", async (HttpContext context, HospitalDatabase db, Ca
         ORDER BY n.Codigos, a.Arancel
         """, cancellationToken);
 
-    var cieCodesTask = db.QueryAsync("""
+    var cieCodesTask = QueryIf(Has("cabos"),"""
         SELECT Id AS id, Codigo AS codigo, Descripcion AS descripcion
         FROM dbo.CIE_10_COD3 ORDER BY Codigo
         """, cancellationToken);
 
-    var laboratoryCodesTask = db.QueryAsync("""
+    var laboratoryCodesTask = QueryIf(Has("nomenclature","cabos"),"""
         WITH Categorias AS (
             SELECT n.Descripcion AS categoria, MIN(n.Codigos) AS codigo,
                    MAX(a.Arancel) AS arancel
@@ -295,13 +299,13 @@ app.MapGet("/api/bootstrap", async (HttpContext context, HospitalDatabase db, Ca
         ORDER BY codigo, l.Descripcion
         """, cancellationToken);
 
-    var specialtiesTask = db.QueryAsync(
+    var specialtiesTask = QueryIf(Has("professionals","appointments","cabos"),
         "SELECT idEspecilidad AS id, descripcion FROM dbo.Especialidad ORDER BY descripcion",
         cancellationToken);
-    var areasTask = db.QueryAsync(
+    var areasTask = QueryIf(Has("personnel"),
         "SELECT idArea AS id, descripcion FROM dbo.Area ORDER BY descripcion",
         cancellationToken);
-    var locationsTask = db.QueryAsync("""
+    var locationsTask = QueryIf(Has("patients","professionals","personnel"),"""
         SELECT l.id, l.nombre, d.id AS departamentoId, d.nombre AS departamento,
                pr.id AS provinciaId, pr.nombre AS provincia
         FROM dbo.Localidades l
@@ -310,7 +314,7 @@ app.MapGet("/api/bootstrap", async (HttpContext context, HospitalDatabase db, Ca
         ORDER BY pr.nombre, d.nombre, l.nombre
         """, cancellationToken);
 
-    var cabosTask = db.QueryAsync("""
+    var cabosTask = QueryIf(Has("cabos","cobros-os"),"""
         SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
         SELECT TOP (500) c.idCabo AS id, CONVERT(nvarchar(20), c.idCabo) AS numero,
                CONVERT(varchar(10), c.fechaCabo, 23) AS fecha,
@@ -343,7 +347,7 @@ app.MapGet("/api/bootstrap", async (HttpContext context, HospitalDatabase db, Ca
         ORDER BY c.idCabo DESC
         """, cancellationToken);
 
-    var cobrosOSTask = db.QueryAsync("""
+    var cobrosOSTask = QueryIf(Has("cobros-os","liquidacion-profesionales","liquidacion-personal"),"""
         SELECT r.idRegistro AS id, os.Id AS obraSocialId, CONVERT(nvarchar(50), os.codigo) AS obraSocialCodigo,
                os.descripcion AS obraSocial, r.numeroFactura, r.estado,
                CONVERT(varchar(10), r.fechaPrestacion, 23) AS fechaPrestacion,
@@ -355,7 +359,7 @@ app.MapGet("/api/bootstrap", async (HttpContext context, HospitalDatabase db, Ca
         ORDER BY r.idRegistro DESC
         """, cancellationToken);
 
-    var cobroDebitsTask = db.QueryAsync("""
+    var cobroDebitsTask = QueryIf(Has("cobros-os"),"""
         SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
         WITH Aranceles AS (
             SELECT Codigos, MAX(Arancel) AS Arancel
@@ -381,7 +385,7 @@ app.MapGet("/api/bootstrap", async (HttpContext context, HospitalDatabase db, Ca
 
     var appointmentRestriction = !isAdmin && currentUser["idProfesional"] is not null ? 1 : 0;
     var linkedProfessionalId = currentUser["idProfesional"] is null ? 0 : Convert.ToInt32(currentUser["idProfesional"]);
-    var appointmentsTask = db.QueryAsync("""
+    var appointmentsTask = QueryIf(Has("appointments"),"""
         SELECT idTurno AS id, CONVERT(varchar(10), fecha, 23) AS fecha,
                LEFT(CONVERT(varchar(8), hora, 108), 5) AS hora, duracion,
                idProfesional AS profesionalCodigo, idPaciente AS pacienteCodigo,
@@ -390,7 +394,7 @@ app.MapGet("/api/bootstrap", async (HttpContext context, HospitalDatabase db, Ca
         WHERE @restrict=0 OR (@profesional>0 AND idProfesional=@profesional)
         ORDER BY fecha, hora
         """, cancellationToken, new() { ["restrict"] = appointmentRestriction, ["profesional"] = linkedProfessionalId });
-    var availabilityTask = db.QueryAsync("""
+    var availabilityTask = QueryIf(Has("appointments"),"""
         SELECT idDisponibilidad AS id, idProfesional AS profesionalCodigo, diaSemana,
                LEFT(CONVERT(varchar(8), desde, 108), 5) AS desde,
                LEFT(CONVERT(varchar(8), hasta, 108), 5) AS hasta, duracion
@@ -422,6 +426,110 @@ app.MapGet("/api/bootstrap", async (HttpContext context, HospitalDatabase db, Ca
         appointments = Has("appointments") ? appointmentsTask.Result : Empty(),
         availability = Has("appointments") ? availabilityTask.Result : Empty()
     });
+});
+
+app.MapGet("/api/statistics", async (DateOnly from, DateOnly to, int? healthInsuranceId, int? attentionType, string? service, HospitalDatabase db, CancellationToken ct) =>
+{
+    if (from > to || to.DayNumber - from.DayNumber > 1826)
+        return Results.ValidationProblem(new Dictionary<string,string[]> { ["periodo"] = ["El período debe ser válido y no superar cinco años."] });
+
+    var parameters = new Dictionary<string,object?> {
+        ["from"] = from.ToDateTime(TimeOnly.MinValue), ["to"] = to.ToDateTime(TimeOnly.MaxValue),
+        ["insurance"] = healthInsuranceId, ["type"] = attentionType,
+        ["service"] = service?.Trim() ?? ""
+    };
+    const string filter = """
+        c.fechaCabo BETWEEN @from AND @to
+        AND (@insurance IS NULL OR c.idObraSocial=@insurance)
+        AND (@type IS NULL OR c.idTipoAtencion=@type)
+        AND (@service=N'' OR EXISTS (
+            SELECT 1 FROM dbo.NomencladorXcabo fnx INNER JOIN dbo.Nomenclador fn ON fn.Id=fnx.idNomenclador
+            WHERE fnx.idCabo=c.idCabo AND (CONVERT(nvarchar(50),fn.Codigos) LIKE N'%'+@service+N'%' OR fn.Descripcion LIKE N'%'+@service+N'%')
+        ))
+        """;
+
+    var summary = await db.QueryAsync($"""
+        SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
+        SELECT COUNT_BIG(*) AS atenciones, COUNT(DISTINCT c.idPaciente) AS pacientes,
+               SUM(CASE WHEN c.idTipoAtencion=3 THEN 1 ELSE 0 END) AS internaciones,
+               SUM(COALESCE(costos.importe,0)) AS importePrestaciones,
+               SUM(COALESCE(medicamentos.importe,0)) AS importeMedicamentos,
+               CAST(AVG(CASE WHEN c.idTipoAtencion=3 AND c.fechaAltaInternacion IS NOT NULL
+                   THEN CONVERT(decimal(10,2),DATEDIFF(DAY,c.fechaCabo,c.fechaAltaInternacion)) END) AS decimal(10,2)) AS estanciaPromedio
+        FROM dbo.Cabo c
+        OUTER APPLY (SELECT SUM(COALESCE(nx.montoPractica,0)*COALESCE(nx.cantidad,1)) importe FROM dbo.NomencladorXcabo nx WHERE nx.idCabo=c.idCabo) costos
+        OUTER APPLY (SELECT SUM(COALESCE(m.precio,0)*COALESCE(mx.cantidad,1)) importe FROM dbo.MedicamentoXcabo mx INNER JOIN dbo.Medicamentos m ON m.idMedicamento=mx.idMedicamento WHERE mx.idCabo=c.idCabo) medicamentos
+        WHERE {filter}
+        """,ct,parameters);
+
+    var trend = await db.QueryAsync($"""
+        SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
+        SELECT CONVERT(char(7),c.fechaCabo,120) AS periodo, COUNT_BIG(*) AS atenciones,
+               COUNT(DISTINCT c.idPaciente) AS pacientes,
+               SUM(CASE WHEN c.idTipoAtencion=3 THEN 1 ELSE 0 END) AS internaciones
+        FROM dbo.Cabo c WHERE {filter}
+        GROUP BY CONVERT(char(7),c.fechaCabo,120) ORDER BY periodo
+        """,ct,parameters);
+
+    var byType = await db.QueryAsync($"""
+        SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
+        SELECT c.idTipoAtencion AS id,
+               CASE c.idTipoAtencion WHEN 1 THEN N'Consulta' WHEN 2 THEN N'Práctica / Imagen' WHEN 3 THEN N'Internación' ELSE N'Otra atención' END AS nombre,
+               COUNT_BIG(*) AS cantidad, COUNT(DISTINCT c.idPaciente) AS pacientes
+        FROM dbo.Cabo c WHERE {filter}
+        GROUP BY c.idTipoAtencion ORDER BY cantidad DESC
+        """,ct,parameters);
+
+    var byInsurance = await db.QueryAsync($"""
+        SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
+        SELECT TOP (12) c.idObraSocial AS id, COALESCE(os.descripcion,N'Sin cobertura') AS nombre,
+               COUNT_BIG(*) AS cantidad, COUNT(DISTINCT c.idPaciente) AS pacientes
+        FROM dbo.Cabo c LEFT JOIN dbo.ObraSocial os ON os.Id=c.idObraSocial WHERE {filter}
+        GROUP BY c.idObraSocial,os.descripcion ORDER BY cantidad DESC
+        """,ct,parameters);
+
+    var practices = await db.QueryAsync($"""
+        SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
+        SELECT TOP (15) CONVERT(nvarchar(50),n.Codigos) AS codigo, LTRIM(RTRIM(n.Descripcion)) AS nombre,
+               SUM(COALESCE(nx.cantidad,1)) AS cantidad, COUNT(DISTINCT c.idCabo) AS atenciones,
+               SUM(COALESCE(nx.montoPractica,0)*COALESCE(nx.cantidad,1)) AS importe
+        FROM dbo.Cabo c INNER JOIN dbo.NomencladorXcabo nx ON nx.idCabo=c.idCabo
+        INNER JOIN dbo.Nomenclador n ON n.Id=nx.idNomenclador WHERE {filter}
+        GROUP BY n.Codigos,n.Descripcion ORDER BY cantidad DESC,nombre
+        """,ct,parameters);
+
+    var medications = await db.QueryAsync($"""
+        SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
+        SELECT TOP (15) m.idMedicamento AS id,m.producto AS nombre,m.presentacion,
+               SUM(COALESCE(mx.cantidad,1)) AS cantidad,COUNT(DISTINCT c.idCabo) AS atenciones,
+               SUM(COALESCE(m.precio,0)*COALESCE(mx.cantidad,1)) AS importe
+        FROM dbo.Cabo c INNER JOIN dbo.MedicamentoXcabo mx ON mx.idCabo=c.idCabo
+        INNER JOIN dbo.Medicamentos m ON m.idMedicamento=mx.idMedicamento WHERE {filter}
+        GROUP BY m.idMedicamento,m.producto,m.presentacion ORDER BY cantidad DESC,m.producto
+        """,ct,parameters);
+
+    var professionals = await db.QueryAsync($"""
+        SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
+        SELECT TOP (15) p.idProfesional AS id,LTRIM(RTRIM(CONCAT(p.apellido,N', ',p.nombre))) AS nombre,
+               COUNT(DISTINCT c.idCabo) AS atenciones,COUNT(DISTINCT c.idPaciente) AS pacientes,
+               SUM(COALESCE(nx.montoPractica,0)*COALESCE(nx.cantidad,1)) AS importe
+        FROM dbo.Cabo c INNER JOIN dbo.ProfesionalXpractica px ON px.idCabo=c.idCabo
+        INNER JOIN dbo.Profesionales p ON p.idProfesional=px.idProfesional
+        LEFT JOIN dbo.NomencladorXcabo nx ON nx.idNomencladoXcabo=px.idNomencladorXcabo WHERE {filter}
+        GROUP BY p.idProfesional,p.apellido,p.nombre ORDER BY atenciones DESC,nombre
+        """,ct,parameters);
+
+    var internments = await db.QueryAsync($"""
+        SET TRANSACTION ISOLATION LEVEL READ UNCOMMITTED;
+        SELECT COUNT_BIG(*) AS total,
+               SUM(CASE WHEN c.fechaAltaInternacion IS NULL THEN 1 ELSE 0 END) AS sinAlta,
+               SUM(CASE WHEN c.fechaAltaInternacion IS NOT NULL AND DATEDIFF(DAY,c.fechaCabo,c.fechaAltaInternacion)>=7 THEN 1 ELSE 0 END) AS prolongadas,
+               MAX(CASE WHEN c.fechaAltaInternacion IS NOT NULL THEN DATEDIFF(DAY,c.fechaCabo,c.fechaAltaInternacion) END) AS estanciaMaxima
+        FROM dbo.Cabo c WHERE c.idTipoAtencion=3 AND {filter}
+        """,ct,parameters);
+
+    var insurances = await db.QueryAsync("SELECT Id AS id,descripcion AS nombre FROM dbo.ObraSocial ORDER BY descripcion",ct);
+    return Results.Ok(new { summary=summary[0],trend,byType,byInsurance,practices,medications,professionals,internments=internments[0],insurances });
 });
 
 app.MapGet("/api/liquidations/health-insurance", async (
@@ -980,6 +1088,7 @@ app.MapGet("/api/cabos/{id:int}", async (int id, HospitalDatabase db, Cancellati
                    ROW_NUMBER() OVER (PARTITION BY pp.idNomencladorXcabo ORDER BY pp.idProfesionalXpractica) AS orden
             FROM dbo.ProfesionalXpractica pp
             LEFT JOIN dbo.Profesionales p ON p.idProfesional = pp.idProfesional
+            WHERE pp.idCabo=@id
         ) px ON px.idNomencladorXcabo = nx.idNomencladoXcabo AND px.orden <= 2
         WHERE nx.idCabo=@id
         GROUP BY nx.idNomencladoXcabo, n.Codigos, n.Descripcion, nx.cantidad, nx.montoPractica, a.Arancel
@@ -1349,11 +1458,11 @@ sealed class HospitalDatabase(string connectionString)
         }
     }
 
-    public async Task<int> ExecuteAsync(string sql, Dictionary<string, object?> parameters, CancellationToken ct)
+    public async Task<int> ExecuteAsync(string sql, Dictionary<string, object?> parameters, CancellationToken ct, int commandTimeout = 30)
     {
         await using var connection = new SqlConnection(connectionString);
         await connection.OpenAsync(ct);
-        await using var command = new SqlCommand(sql, connection) { CommandTimeout = 30 };
+        await using var command = new SqlCommand(sql, connection) { CommandTimeout = commandTimeout };
         AddParameters(command, parameters);
         return await command.ExecuteNonQueryAsync(ct);
     }
@@ -1450,6 +1559,7 @@ static class AuthSecurity
         string? module=value switch
         {
             var p when p.StartsWith("/api/users")=>"users",
+            var p when p.StartsWith("/api/statistics")=>"statistics",
             var p when p.Contains("/liquidations/health-insurance")=>"liquidacion-obra-social",
             var p when p.Contains("/liquidations/professionals")=>"liquidacion-profesionales",
             var p when p.Contains("/liquidations/personnel")=>"liquidacion-personal",

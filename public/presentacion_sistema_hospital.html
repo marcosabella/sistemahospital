@@ -47,6 +47,16 @@
   .highlight { background:#064f63; color:white; border-radius:7mm; padding:10mm; }
   .highlight h3 { color:#7ee1dc; font-size:15pt; }
   .highlight p { color:#e5f8f8; font-size:12pt; line-height:1.55; }
+  .stats-preview { height:132mm; border:1px solid #cbd9e3; background:white; border-radius:4mm; padding:5mm; box-shadow:0 2mm 7mm rgba(31,60,80,.10); }
+  .stats-kpis { display:grid; grid-template-columns:repeat(3,1fr); gap:3mm; }
+  .stats-kpi { border:1px solid #d8e5ea; border-radius:3mm; padding:3mm; background:#f8fbfc; }
+  .stats-kpi span { display:block; color:#60758b; font-size:7pt; font-weight:700; text-transform:uppercase; }
+  .stats-kpi strong { display:block; margin-top:1.5mm; color:#075d70; font-size:14pt; }
+  .stats-chart { display:flex; align-items:end; gap:3mm; height:50mm; margin-top:5mm; padding:4mm 5mm 0; border:1px solid #d8e5ea; border-radius:3mm; background:linear-gradient(#fbfdfe,#f4f9fa); }
+  .stats-bar { flex:1; position:relative; min-height:8mm; border-radius:2mm 2mm 0 0; background:linear-gradient(#20b8b1,#078b9a); }
+  .stats-bar span { position:absolute; left:50%; bottom:-5mm; transform:translateX(-50%); color:#718096; font-size:6.5pt; }
+  .stats-list { display:grid; grid-template-columns:1fr 1fr; gap:3mm; margin-top:8mm; }
+  .stats-list div { border-left:1.2mm solid #0a9ca5; background:#edf8f8; padding:3mm; color:#405e70; font-size:8pt; }
   @media print { html,body { background:white; } }
 </style>
 </head>
@@ -56,7 +66,7 @@
     <p class="eyebrow" style="color:#79e0dc">Presentación institucional</p>
     <h1>Sistema de Gestión Hospitalaria</h1>
     <p class="subtitle">Plataforma integral para organizar la atención, centralizar la información y mejorar los procesos administrativos y asistenciales del Hospital Municipal Luis Rivero.</p>
-    <div class="cover-footer">Documento de presentación · Julio de 2026</div>
+    <div class="cover-footer">Documento de presentación · Agosto de 2026</div>
   </section>
 
   <section class="page">
@@ -68,7 +78,7 @@
       <article class="card"><span class="num">03</span><strong>Trazabilidad asistencial</strong><p>Cabos, prestaciones, diagnósticos, pedidos médicos, laboratorios y evoluciones vinculadas al paciente.</p></article>
       <article class="card"><span class="num">04</span><strong>Gestión económica</strong><p>Registro de facturación y cobros de obras sociales, débitos y liquidaciones institucionales.</p></article>
       <article class="card"><span class="num">05</span><strong>Seguridad por roles</strong><p>Usuarios asociados a profesionales, grupos de permisos y acceso diferenciado por módulo y acción.</p></article>
-      <article class="card"><span class="num">06</span><strong>Base para evolucionar</strong><p>Arquitectura modular preparada para incorporar nuevos requerimientos, reportes y circuitos de atención.</p></article>
+      <article class="card"><span class="num">06</span><strong>Inteligencia para dirección</strong><p>Estadísticas integrales, tendencias e indicadores para acompañar la toma de decisiones.</p></article>
     </div>
     <div class="confidential">Uso institucional</div><div class="page-number">2</div>
   </section>
@@ -100,5 +110,6 @@
   <section class="page"><div class="brand-line"></div><div class="header"><div><p class="eyebrow">Distribución administrativa</p><h2>Liquidación de Personal</h2><p>Determina el fondo destinado al personal y distribuye el importe entre los integrantes de la nómina institucional.</p></div><span class="module-badge">LIQUIDACIÓN</span></div><div class="module-layout"><div><div class="screenshot-wrap"><img src="capturas/Liquidacion%20Personal.png" alt="Liquidación de Personal"></div><div class="note">La impresión se genera mediante el diálogo del navegador, lista para guardar como PDF o enviar a la impresora.</div></div><aside class="features"><h3>Funcionalidades</h3><ul><li>Selección del período a procesar.</li><li>Cálculo sobre los cobros de obras sociales.</li><li>Visualización del bruto y descuento del 18%.</li><li>Determinación del neto institucional del 82%.</li><li>Cálculo del fondo del 10% para el personal.</li><li>Distribución uniforme e impresión de la liquidación.</li></ul></aside></div><div class="confidential">Uso institucional</div><div class="page-number">15</div></section>
 
   <section class="page closing"><div class="brand-line"></div><div class="header"><div><p class="eyebrow">Impacto institucional</p><h2>Beneficios esperados</h2></div></div><div class="closing-grid"><div><ul><li>Información disponible en un único sistema y con criterios uniformes.</li><li>Mayor trazabilidad de la atención brindada a cada paciente.</li><li>Reducción de tareas manuales y duplicación de registros.</li><li>Mejor coordinación entre administración y profesionales.</li><li>Seguimiento de facturación, cobros y liquidaciones.</li><li>Acceso seguro según usuario, profesional, grupo y responsabilidad.</li><li>Base escalable para nuevas funcionalidades y reportes.</li></ul></div><div class="highlight"><h3>Una plataforma para acompañar la gestión</h3><p>El sistema integra los procesos centrales del hospital y permite evolucionar gradualmente, incorporando nuevos circuitos asistenciales y administrativos de acuerdo con las necesidades institucionales.</p><p><strong>Hospital Municipal Luis Rivero</strong></p></div></div><div class="confidential">Uso institucional</div><div class="page-number">16</div></section>
+  <section class="page"><div class="brand-line"></div><div class="header"><div><p class="eyebrow">Inteligencia de gestión</p><h2>Estadísticas Hospitalarias</h2><p>Transforma la información operativa en indicadores claros para la planificación y la toma de decisiones de la Dirección.</p></div><span class="module-badge">ESTADÍSTICAS</span></div><div class="module-layout"><div><div class="stats-preview"><div class="stats-kpis"><div class="stats-kpi"><span>Atenciones</span><strong>4.286</strong></div><div class="stats-kpi"><span>Pacientes</span><strong>2.147</strong></div><div class="stats-kpi"><span>Internaciones</span><strong>318</strong></div></div><div class="stats-chart"><div class="stats-bar" style="height:45%"><span>Ene</span></div><div class="stats-bar" style="height:58%"><span>Feb</span></div><div class="stats-bar" style="height:52%"><span>Mar</span></div><div class="stats-bar" style="height:73%"><span>Abr</span></div><div class="stats-bar" style="height:68%"><span>May</span></div><div class="stats-bar" style="height:87%"><span>Jun</span></div><div class="stats-bar" style="height:78%"><span>Jul</span></div></div><div class="stats-list"><div><strong>Prestaciones más realizadas</strong><br>Volumen, cantidad de atenciones e importes.</div><div><strong>Actividad profesional</strong><br>Atenciones y pacientes por profesional.</div><div><strong>Obras sociales</strong><br>Participación y cobertura asistencial.</div><div><strong>Medicamentos</strong><br>Consumo y costo estimado por período.</div></div></div><div class="note">El reporte ejecutivo conserva el formato institucional y puede imprimirse en PDF con todos los filtros aplicados.</div></div><aside class="features"><h3>Funcionalidades</h3><ul><li>Filtros por período, obra social, tipo de atención y prestación.</li><li>Indicadores de atenciones y pacientes únicos.</li><li>Evolución mensual y distribución asistencial.</li><li>Seguimiento de internaciones y estancias.</li><li>Rankings de prestaciones, medicamentos y profesionales.</li><li>Acceso exclusivo por rol de Dirección y permisos.</li><li>Reporte institucional listo para imprimir o guardar en PDF.</li></ul></aside></div><div class="confidential">Uso institucional</div><div class="page-number">17</div></section>
 </body>
 </html>

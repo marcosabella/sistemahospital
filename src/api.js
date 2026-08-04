@@ -6,6 +6,14 @@ const parseResponse = async response => {
 const authFetch = (url, options = {}) => {
   const token = sessionStorage.getItem('hospital_token')
   return fetch(url, { ...options, headers: { ...(options.headers || {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) } })
+    .then(response => {
+      if (response.status === 401) {
+        sessionStorage.removeItem('hospital_token')
+        sessionStorage.removeItem('hospital_user')
+        window.dispatchEvent(new Event('hospital:session-expired'))
+      }
+      return response
+    })
 }
 export const login = (usuario, password) => fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ usuario, password }) }).then(parseResponse)
 export const logout = () => authFetch('/api/auth/logout', { method: 'POST' }).then(response => response.status === 204 ? null : parseResponse(response))
@@ -14,6 +22,13 @@ export const saveUser = item => send(`/api/users${item.id ? `/${item.id}` : ''}`
 export const saveRole = item => send(`/api/users/roles${item.id ? `/${item.id}` : ''}`, item.id ? 'PUT' : 'POST', item)
 
 export const loadHospitalData = () => authFetch('/api/bootstrap').then(parseResponse)
+export const loadStatistics = filters => {
+  const params = new URLSearchParams({ from: filters.from, to: filters.to })
+  if (filters.healthInsuranceId) params.set('healthInsuranceId', filters.healthInsuranceId)
+  if (filters.attentionType) params.set('attentionType', filters.attentionType)
+  if (filters.service?.trim()) params.set('service', filters.service.trim())
+  return authFetch(`/api/statistics?${params}`).then(parseResponse)
+}
 export const loadClinicalHistory = patientId => authFetch(`/api/clinical-records/patients/${patientId}`).then(parseResponse)
 export const saveClinicalRecord = item => send('/api/clinical-records', 'POST', item)
 export const loadHealthInsurances = () => authFetch('/api/catalogs/health-insurances').then(parseResponse)

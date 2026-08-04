@@ -18,6 +18,7 @@ import {
   loadCabosPage,
   loadCabosForDebit,
   loadHospitalData,
+  loadStatistics,
   loadClinicalHistory,
   saveClinicalRecord,
   loadHealthInsuranceLiquidation,
@@ -80,6 +81,9 @@ import {
   CalendarX,
   ReceiptText,
   ChevronDown,
+  BarChart3,
+  Printer,
+  RefreshCw,
 } from "lucide-react";
 
 const emptyPatient = {
@@ -6142,11 +6146,107 @@ function ClinicalHistory({ patients, initialPatient, professionals, canCreate, o
     {patientPickerOpen && <PatientSearchModal patients={patients} onSelect={choosePatient} onClose={() => setPatientPickerOpen(false)}/>}</section>;
 }
 
+function StatisticsDashboard({ canPrint, onNotice }) {
+  const today = new Date().toISOString().slice(0, 10);
+  const yearStart = `${today.slice(0, 4)}-01-01`;
+  const [filters, setFilters] = useState({ from: yearStart, to: today, healthInsuranceId: "", attentionType: "", service: "" });
+  const [appliedFilters, setAppliedFilters] = useState(filters);
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const number = (value) => new Intl.NumberFormat("es-AR", { maximumFractionDigits: 1 }).format(Number(value || 0));
+  const currency = (value) => new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 0 }).format(Number(value || 0));
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    loadStatistics(appliedFilters)
+      .then((result) => { if (active) setData(result); })
+      .catch((error) => { if (active) onNotice(`No se pudieron cargar las estadísticas: ${error.message}`); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [appliedFilters]);
+  const apply = (event) => {
+    event.preventDefault();
+    if (!filters.from || !filters.to || filters.from > filters.to) return onNotice("Seleccioná un período válido.");
+    setAppliedFilters({ ...filters });
+  };
+  const maxTrend = Math.max(...(data?.trend || []).map((item) => Number(item.atenciones)), 1);
+  const maxInsurance = Math.max(...(data?.byInsurance || []).map((item) => Number(item.cantidad)), 1);
+  const summary = data?.summary || {};
+  const internments = data?.internments || {};
+  const printReport = () => {
+    if (!data) return;
+    const frame = document.createElement("iframe");
+    frame.setAttribute("aria-hidden", "true");
+    frame.style.cssText = "position:fixed;width:0;height:0;border:0;right:0;bottom:0";
+    document.body.appendChild(frame);
+    const doc = frame.contentDocument;
+    const escape = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" })[character]);
+    const issuedAt = new Intl.DateTimeFormat("es-AR", { dateStyle: "short", timeStyle: "short" }).format(new Date());
+    const insurance = appliedFilters.healthInsuranceId ? data.insurances.find((item) => String(item.id) === String(appliedFilters.healthInsuranceId))?.nombre : "Todas";
+    const attention = { "": "Todos", "1": "Consulta", "2": "Práctica / Imagen", "3": "Internación" }[String(appliedFilters.attentionType || "")];
+    const header = (page, total) => `<header><img src="${escape(hospitalCrossUrl)}" alt="Hospital"><div class="institution"><strong>HOSPITAL MUNICIPAL LUIS O. RIVERO</strong><span>Mariano Moreno 140 - Jovita - 6127 - (Cba)</span><span>Tel. (03385) - 498205 &nbsp;&nbsp; Código 04.330953</span></div><div class="report-meta"><strong>Estadísticas Hospitalarias</strong><span>Fecha de emisión: ${escape(issuedAt)}</span><span>Página ${page} de ${total}</span></div></header>`;
+    const filtersHtml = `<div class="filters"><div><b>PERÍODO:</b> ${formatDate(appliedFilters.from)} al ${formatDate(appliedFilters.to)}</div><div><b>OBRA SOCIAL:</b> ${escape(insurance)}</div><div><b>TIPO DE ATENCIÓN:</b> ${escape(attention)}</div><div><b>PRESTACIÓN:</b> ${escape(appliedFilters.service || "Todas")}</div></div>`;
+    const table = (headers, rows) => `<table><thead><tr>${headers.map((item) => `<th>${escape(item)}</th>`).join("")}</tr></thead><tbody>${rows.length ? rows.join("") : `<tr><td colspan="${headers.length}" class="empty">Sin datos para el período seleccionado.</td></tr>`}</tbody></table>`;
+    const trendRows = data.trend.map((item)=>`<tr><td>${escape(item.periodo)}</td><td class="number">${number(item.atenciones)}</td><td class="number">${number(item.pacientes)}</td><td class="number">${number(item.internaciones)}</td></tr>`);
+    const chunks = (rows, size) => Array.from({ length: Math.max(1, Math.ceil(rows.length / size)) }, (_, index) => rows.slice(index * size, (index + 1) * size));
+    const pageBodies = [
+      `<h2>Resumen ejecutivo</h2><div class="kpis">${[["Atenciones",number(summary.atenciones)],["Pacientes únicos",number(summary.pacientes)],["Internaciones",number(summary.internaciones)],["Estancia promedio",`${number(summary.estanciaPromedio)} días`],["Importe prestaciones",currency(summary.importePrestaciones)],["Costo medicamentos",currency(summary.importeMedicamentos)]].map(([label,value]) => `<div><span>${escape(label)}</span><strong>${escape(value)}</strong></div>`).join("")}</div><h2>Tipo de atención</h2>${table(["Tipo","Atenciones","Pacientes"],data.byType.map((item)=>`<tr><td>${escape(item.nombre)}</td><td class="number">${number(item.cantidad)}</td><td class="number">${number(item.pacientes)}</td></tr>`))}<h2>Indicadores de internación</h2>${table(["Total","Sin alta","Prolongadas","Estancia máxima"],[`<tr><td class="number">${number(internments.total)}</td><td class="number">${number(internments.sinAlta)}</td><td class="number">${number(internments.prolongadas)}</td><td class="number">${number(internments.estanciaMaxima)} días</td></tr>`])}<h2>Principales obras sociales</h2>${table(["Obra social","Atenciones","Pacientes","Participación"],data.byInsurance.map((item)=>`<tr><td>${escape(item.nombre)}</td><td class="number">${number(item.cantidad)}</td><td class="number">${number(item.pacientes)}</td><td class="number">${number(Number(item.cantidad)/Math.max(Number(summary.atenciones),1)*100)}%</td></tr>`))}`,
+      ...chunks(trendRows, 28).map((rows, index) => `<h2>Actividad mensual${index ? " (continuación)" : ""}</h2>${table(["Período","Atenciones","Pacientes","Internaciones"],rows)}`),
+      `<h2>Prestaciones más realizadas</h2>${table(["Código","Prestación","Cantidad","Atenciones","Importe"],data.practices.map((item)=>`<tr><td>${escape(item.codigo)}</td><td>${escape(item.nombre)}</td><td class="number">${number(item.cantidad)}</td><td class="number">${number(item.atenciones)}</td><td class="number">${currency(item.importe)}</td></tr>`))}<h2>Medicamentos más utilizados</h2>${table(["Medicamento","Presentación","Cantidad","Atenciones","Costo"],data.medications.map((item)=>`<tr><td>${escape(item.nombre)}</td><td>${escape(item.presentacion || "-")}</td><td class="number">${number(item.cantidad)}</td><td class="number">${number(item.atenciones)}</td><td class="number">${currency(item.importe)}</td></tr>`))}`,
+      `<h2>Actividad profesional</h2>${table(["Profesional","Atenciones","Pacientes","Importe"],data.professionals.map((item)=>`<tr><td>${escape(item.nombre)}</td><td class="number">${number(item.atenciones)}</td><td class="number">${number(item.pacientes)}</td><td class="number">${currency(item.importe)}</td></tr>`))}<footer>Reporte generado desde el módulo de Estadísticas · Uso institucional</footer>`,
+    ];
+    const pages = pageBodies.map((body,index) => `<section class="report-page">${header(index+1,pageBodies.length)}${filtersHtml}${body}</section>`).join("");
+    doc.open();
+    doc.write(`<!doctype html><html><head><meta charset="UTF-8"><title>Estadísticas Hospitalarias</title><style>@page{size:A4 portrait;margin:0}*{box-sizing:border-box}body{margin:0;background:#eee;font-family:Arial,sans-serif;color:#111;font-size:9px}.report-page{width:210mm;height:297mm;overflow:hidden;margin:0 auto;background:#fff;padding:8mm 9mm 7mm;page-break-after:always}.report-page:last-child{page-break-after:auto}header{height:29mm;display:grid;grid-template-columns:26mm 1fr 66mm;align-items:center;border-bottom:1.5px solid #111;padding-bottom:3mm}header img{max-width:22mm;max-height:23mm;object-fit:contain}.institution{display:flex;flex-direction:column;gap:2px;font-size:9px}.institution strong{font-size:13px}.report-meta{display:flex;flex-direction:column;text-align:right;gap:3px}.report-meta strong{font-size:15px;line-height:1.1}.filters{display:grid;grid-template-columns:1fr 1fr;gap:1.5mm 8mm;padding:3mm 1mm 2.5mm;border-bottom:1.5px solid #111}.filters div:nth-child(even){text-align:right}h2{margin:3.5mm 0 1.5mm;font-size:10px;text-transform:uppercase}.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:1.5mm}.kpis div{display:flex;flex-direction:column;border:1px solid #777;padding:2.2mm}.kpis span{font-size:8px;text-transform:uppercase;color:#444}.kpis strong{margin-top:1mm;font-size:13px}table{width:100%;border-collapse:collapse;table-layout:fixed;break-inside:avoid}tr{break-inside:avoid}th{border:1px solid #555;background:#eee;padding:1.2mm 1mm;text-align:left;font-size:8px}td{padding:1.1mm 1mm;border-bottom:1px solid #ddd;vertical-align:top}.number{text-align:right;font-variant-numeric:tabular-nums}.empty{text-align:center;height:12mm;color:#555}footer{margin-top:5mm;border-top:1px solid #999;padding-top:2mm;text-align:right;color:#555}@media print{body{background:#fff}.report-page{margin:0}}</style></head><body>${pages}<script>window.addEventListener('afterprint',()=>window.frameElement?.remove());window.addEventListener('load',()=>setTimeout(()=>{window.focus();window.print()},250));<\/script></body></html>`);
+    doc.close();
+  };
+  const Table = ({ columns, rows, empty = "Sin datos para el período seleccionado." }) => (
+    <div className="overflow-x-auto rounded-xl border border-slate-200">
+      <table className="w-full min-w-[620px] text-sm"><thead className="bg-slate-50 text-left text-xs uppercase text-slate-500"><tr>{columns.map((column) => <th key={column.label} className={`px-4 py-3 ${column.right ? "text-right" : ""}`}>{column.label}</th>)}</tr></thead>
+      <tbody className="divide-y divide-slate-100">{rows.length ? rows.map((row, index) => <tr key={row.id || row.codigo || `${row.nombre}-${index}`} className="hover:bg-slate-50">{columns.map((column) => <td key={column.label} className={`px-4 py-3 ${column.right ? "text-right" : ""} ${column.primary ? "font-semibold text-slate-800" : "text-slate-600"}`}>{column.render ? column.render(row) : row[column.key]}</td>)}</tr>) : <tr><td colSpan={columns.length} className="p-10 text-center text-slate-400">{empty}</td></tr>}</tbody></table>
+    </div>
+  );
+  return <section className="space-y-6 print:bg-white">
+    <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start"><h2 className="text-2xl font-bold text-slate-800">Estadísticas Hospitalarias</h2>{canPrint && <button type="button" onClick={printReport} className="secondary gap-2 print:hidden"><Printer size={18}/> Imprimir reporte</button>}</div>
+    <form onSubmit={apply} className="grid gap-4 rounded-2xl border bg-white p-5 shadow-sm print:hidden md:grid-cols-2 xl:grid-cols-[1fr_1fr_1.3fr_1fr_1.5fr_auto]">
+      <Field label="Desde"><input type="date" value={filters.from} onChange={(e) => setFilters({...filters,from:e.target.value})} className="control"/></Field>
+      <Field label="Hasta"><input type="date" value={filters.to} onChange={(e) => setFilters({...filters,to:e.target.value})} className="control"/></Field>
+      <Field label="Obra social"><select value={filters.healthInsuranceId} onChange={(e) => setFilters({...filters,healthInsuranceId:e.target.value})} className="control"><option value="">Todas</option>{(data?.insurances || []).map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}</select></Field>
+      <Field label="Tipo de atención"><select value={filters.attentionType} onChange={(e) => setFilters({...filters,attentionType:e.target.value})} className="control"><option value="">Todos</option><option value="1">Consulta</option><option value="2">Práctica / Imagen</option><option value="3">Internación</option></select></Field>
+      <Field label="Prestación"><input value={filters.service} onChange={(e) => setFilters({...filters,service:e.target.value})} className="control" placeholder="Código o descripción"/></Field>
+      <div className="flex items-end"><button disabled={loading} className="primary w-full whitespace-nowrap"><RefreshCw size={17} className={loading ? "animate-spin" : ""}/> Analizar</button></div>
+    </form>
+    {loading ? <div className="grid min-h-72 place-items-center rounded-2xl border bg-white text-slate-400"><div className="text-center"><RefreshCw className="mx-auto animate-spin" size={30}/><p className="mt-3 font-semibold">Procesando indicadores...</p></div></div> : data && <>
+      <p className="hidden text-sm text-slate-500 print:block">Período: {formatDate(appliedFilters.from)} al {formatDate(appliedFilters.to)}</p>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">{[
+        ["Atenciones",number(summary.atenciones),"Cabos registrados","bg-cyan-50 text-cyan-700"],
+        ["Pacientes",number(summary.pacientes),"Personas únicas","bg-blue-50 text-blue-700"],
+        ["Internaciones",number(summary.internaciones),`${number(summary.estanciaPromedio)} días promedio`,"bg-violet-50 text-violet-700"],
+        ["Prestaciones",currency(summary.importePrestaciones),"Importe registrado","bg-emerald-50 text-emerald-700"],
+        ["Medicamentos",currency(summary.importeMedicamentos),"Costo estimado","bg-amber-50 text-amber-700"],
+      ].map(([label,value,detail,color]) => <article key={label} className="rounded-2xl border bg-white p-5 shadow-sm"><span className={`inline-flex rounded-lg px-2.5 py-1 text-xs font-bold uppercase ${color}`}>{label}</span><p className="mt-4 text-2xl font-bold text-slate-800">{value}</p><p className="mt-1 text-xs text-slate-500">{detail}</p></article>)}</div>
+      <div className="grid gap-5 xl:grid-cols-[1.5fr_1fr]">
+        <article className="rounded-2xl border bg-white p-5 shadow-sm"><h3 className="font-bold text-slate-800">Evolución mensual</h3><p className="text-sm text-slate-500">Atenciones e internaciones registradas por mes.</p><div className="mt-6 flex h-56 items-end gap-2 overflow-x-auto border-b border-slate-200 pb-1">{data.trend.map((item) => <div key={item.periodo} className="flex min-w-14 flex-1 flex-col items-center justify-end gap-2"><span className="text-xs font-bold text-slate-600">{number(item.atenciones)}</span><div className="relative w-full max-w-12 rounded-t-lg bg-hospital-500" style={{height:`${Math.max(6,Number(item.atenciones)/maxTrend*160)}px`}}><div className="absolute bottom-0 w-full rounded-t-lg bg-violet-500" title={`${item.internaciones} internaciones`} style={{height:`${Number(item.internaciones)/Math.max(Number(item.atenciones),1)*100}%`}}/></div><span className="text-[10px] text-slate-500">{item.periodo.slice(5)}/{item.periodo.slice(2,4)}</span></div>)}</div></article>
+        <article className="rounded-2xl border bg-white p-5 shadow-sm"><h3 className="font-bold text-slate-800">Internaciones</h3><p className="text-sm text-slate-500">Seguimiento de estancia y altas.</p><div className="mt-5 grid grid-cols-2 gap-3">{[["Total",number(internments.total)],["Sin alta",number(internments.sinAlta)],["Prolongadas (+7 días)",number(internments.prolongadas)],["Estancia máxima",`${number(internments.estanciaMaxima)} días`]].map(([label,value]) => <div key={label} className="rounded-xl bg-slate-50 p-4"><p className="text-xs font-semibold text-slate-500">{label}</p><p className="mt-2 text-xl font-bold text-slate-800">{value}</p></div>)}</div></article>
+      </div>
+      <div className="grid gap-5 lg:grid-cols-2">
+        <article className="rounded-2xl border bg-white p-5 shadow-sm"><h3 className="font-bold text-slate-800">Distribución por atención</h3><div className="mt-4 space-y-3">{data.byType.map((item) => { const pct=Number(summary.atenciones)?Number(item.cantidad)/Number(summary.atenciones)*100:0; return <div key={item.id}><div className="mb-1 flex justify-between text-sm"><span className="font-semibold text-slate-700">{item.nombre}</span><span>{number(item.cantidad)} · {number(pct)}%</span></div><div className="h-2 rounded-full bg-slate-100"><div className="h-2 rounded-full bg-hospital-500" style={{width:`${pct}%`}}/></div></div>;})}</div></article>
+        <article className="rounded-2xl border bg-white p-5 shadow-sm"><h3 className="font-bold text-slate-800">Principales coberturas</h3><div className="mt-4 space-y-3">{data.byInsurance.map((item) => <div key={item.id || item.nombre}><div className="mb-1 flex justify-between gap-3 text-sm"><span className="truncate font-semibold text-slate-700">{item.nombre}</span><span>{number(item.cantidad)}</span></div><div className="h-2 rounded-full bg-slate-100"><div className="h-2 rounded-full bg-blue-500" style={{width:`${Number(item.cantidad)/maxInsurance*100}%`}}/></div></div>)}</div></article>
+      </div>
+      <article className="rounded-2xl border bg-white p-5 shadow-sm"><h3 className="font-bold text-slate-800">Prestaciones más realizadas</h3><p className="mb-4 text-sm text-slate-500">Volumen e importe registrado en el período.</p><Table rows={data.practices} columns={[{label:"Código",key:"codigo"},{label:"Prestación",key:"nombre",primary:true},{label:"Cantidad",render:(x)=>number(x.cantidad),right:true},{label:"Atenciones",render:(x)=>number(x.atenciones),right:true},{label:"Importe",render:(x)=>currency(x.importe),right:true}]}/></article>
+      <div className="grid gap-5 xl:grid-cols-2">
+        <article className="rounded-2xl border bg-white p-5 shadow-sm"><h3 className="font-bold text-slate-800">Medicamentos más utilizados</h3><p className="mb-4 text-sm text-slate-500">Consumo y costo estimado.</p><Table rows={data.medications} columns={[{label:"Medicamento",render:(x)=><><span className="font-semibold text-slate-800">{x.nombre}</span><small className="block text-slate-400">{x.presentacion}</small></>},{label:"Cantidad",render:(x)=>number(x.cantidad),right:true},{label:"Atenciones",render:(x)=>number(x.atenciones),right:true},{label:"Costo",render:(x)=>currency(x.importe),right:true}]}/></article>
+        <article className="rounded-2xl border bg-white p-5 shadow-sm"><h3 className="font-bold text-slate-800">Actividad profesional</h3><p className="mb-4 text-sm text-slate-500">Profesionales con mayor volumen asistencial.</p><Table rows={data.professionals} columns={[{label:"Profesional",key:"nombre",primary:true},{label:"Atenciones",render:(x)=>number(x.atenciones),right:true},{label:"Pacientes",render:(x)=>number(x.pacientes),right:true},{label:"Importe",render:(x)=>currency(x.importe),right:true}]}/></article>
+      </div>
+    </>}
+  </section>;
+}
+
 const permissionModules = [
   ["appointments", "Turnos"], ["cabos", "CABOS"], ["cobros-os", "Cobros O. Social"],
   ["liquidacion-obra-social", "Liquidación Obra Social"], ["liquidacion-profesionales", "Liquidación Profesionales"], ["liquidacion-personal", "Liquidación Personal"],
   ["patients", "Pacientes"], ["clinical-history", "Historia Clínica"], ["professionals", "Profesionales"], ["personnel", "Personal"], ["medications", "Medicamentos"],
-  ["health-insurances", "Obras sociales"], ["nomenclature", "Nomenclador"], ["users", "Usuarios y permisos"],
+  ["health-insurances", "Obras sociales"], ["nomenclature", "Nomenclador"], ["statistics", "Estadísticas"], ["users", "Usuarios y permisos"],
 ];
 const permissionActions = [["view", "Ver"], ["create", "Crear"], ["edit", "Editar"], ["delete", "Eliminar"], ["print", "Imprimir"]];
 
@@ -6460,6 +6560,14 @@ function Dashboard({ onLogout, currentUser }) {
         >
           <BookOpen size={21} />
           {!collapsed && <span className="font-semibold">Nomenclador</span>}
+        </button>
+        <button
+          onClick={() => goTo("statistics")}
+          hidden={!can("statistics")}
+          className={`flex w-full items-center rounded-xl py-2.5 ${module === "statistics" ? "bg-hospital-50 text-hospital-700" : "text-slate-500 hover:bg-slate-50"} ${collapsed ? "justify-center" : "gap-3 px-3"}`}
+        >
+          <BarChart3 size={21} />
+          {!collapsed && <span className="font-semibold">Estadísticas</span>}
         </button>
         {can("users") && <button
           onClick={() => goTo("users")}
@@ -6983,6 +7091,8 @@ function Dashboard({ onLogout, currentUser }) {
   const personnelContent =
     module === "users"
       ? <UsersManagement onNotice={(message)=>{setNotice(message);setTimeout(()=>setNotice(""),4000);}} />
+      : module === "statistics"
+      ? <StatisticsDashboard canPrint={can("statistics", "print")} onNotice={(message)=>{setNotice(message);setTimeout(()=>setNotice(""),5000);}} />
       : module === "appointments"
       ? appointmentContent
       : module === "clinical-history"
@@ -7017,6 +7127,7 @@ function Dashboard({ onLogout, currentUser }) {
     medications: { title: "Medicamentos", intro: "Mantené actualizado el catálogo utilizado en las atenciones.", steps: [["Buscá el medicamento", "Localizalo por código o descripción."], ["Creá o editá", "Registrá una descripción clara y el código correspondiente."], ["Eliminá con precaución", "Comprobá que el registro no sea necesario para nuevas cargas."]], tip: "Usá descripciones uniformes para facilitar la búsqueda durante la carga de cabos." },
     "health-insurances": { title: "Obras Sociales", intro: "Gestioná las entidades de cobertura disponibles en el sistema.", steps: [["Buscá la entidad", "Filtrá por código, sigla o denominación."], ["Completá los datos", "Registrá identificación, contacto y demás información requerida."], ["Mantenela actualizada", "Revisá sus datos antes de facturar o liquidar."]], tip: "Evitar duplicados garantiza que cobros, cabos y liquidaciones queden agrupados correctamente." },
     nomenclature: { title: "Nomenclador", intro: "Consultá y administrá códigos, descripciones y valores de las prácticas.", steps: [["Buscá la práctica", "Usá el código o parte de su descripción."], ["Revisá sus valores", "Controlá honorarios, gastos y demás importes configurados."], ["Actualizá con cuidado", "Verificá la vigencia antes de modificar un valor."]], tip: "Los valores del nomenclador afectan los cálculos de prestaciones y liquidaciones." },
+    statistics: { title: "Estadísticas", intro: "Analizá la actividad hospitalaria con indicadores consolidados para dirección.", steps: [["Definí el período", "Elegí fechas y, si corresponde, obra social, tipo de atención o prestación."], ["Analizá los indicadores", "Revisá tendencias, internaciones, coberturas, prestaciones, medicamentos y profesionales."], ["Compartí el tablero", "Usá la impresión para conservar o presentar el análisis filtrado."]], tip: "Los importes reflejan los valores registrados en los cabos y deben interpretarse junto con el volumen asistencial." },
     users: { title: "Usuarios y Permisos", intro: "Creá usuarios internos y definí qué módulos y acciones pueden utilizar.", steps: [["Creá el usuario", "Ingresá un nombre de usuario, nombre completo y contraseña."], ["Asigná permisos", "Habilitá consulta, creación, edición, eliminación e impresión por módulo."], ["Revisá el acceso", "Guardá y comprobá el perfil con una nueva sesión."]], tip: "Otorgá únicamente los permisos necesarios para las tareas de cada usuario." },
   };
   const helpGuide = helpGuides[module] || { title: "Ayuda", intro: "Información de uso del módulo actual.", steps: [], tip: "Consultá con el administrador ante cualquier duda." };
@@ -7237,6 +7348,14 @@ function Dashboard({ onLogout, currentUser }) {
 export default function App() {
   const [screen, setScreen] = useState(() => sessionStorage.getItem("hospital_token") ? "dashboard" : "login");
   const [currentUser, setCurrentUser] = useState(() => { try { return JSON.parse(sessionStorage.getItem("hospital_user") || "null"); } catch { return null; } });
+  useEffect(() => {
+    const handleExpiredSession = () => {
+      setCurrentUser(null);
+      setScreen("login");
+    };
+    window.addEventListener("hospital:session-expired", handleExpiredSession);
+    return () => window.removeEventListener("hospital:session-expired", handleExpiredSession);
+  }, []);
   if (screen === "dashboard")
     return <Dashboard currentUser={currentUser} onLogout={async () => { try { await endSession(); } catch { /* La sesión local se cierra igualmente. */ } sessionStorage.removeItem("hospital_token"); sessionStorage.removeItem("hospital_user"); setCurrentUser(null); setScreen("login"); }} />;
   return <Login onLogin={(user) => { setCurrentUser(user); setScreen("dashboard"); }} />;
